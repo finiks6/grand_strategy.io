@@ -507,37 +507,6 @@
        var annex=document.getElementById('annexBtn'); if(annex){ annex.onclick=function(){ var before=segKeySetFor(playerFID); WORLD.owner[k]=playerFID; var added=newSegmentsFor(playerFID,before); rebuildBordersSmooth(); // keep existing grow animation on top
        playBorderGrowSegments(added, Factions[playerFID].color); tilePanel.style.display='none'; drawMini(); }; }
       }
-         else { body+='<div class="row">'+builds.map(function(b){return '<button class="pill" disabled title="placeholder">'+b.label+'</button>'}).join('')+'</div>';}
-         body+='<div style="opacity:.7;margin-top:6px">(Building actions are placeholders for now.)</div>';
-       } else {
-         var can=isPlayerBorder(x,y)&&!enemyOwned;
-         body+='<div class="kpi">🧭 Biome <b>'+bname+'</b></div>';
-         body+='<div class="row" style="margin-top:6px">'+
-               '<button class="pill" disabled title="placeholder">🔎 Explore</button>'+
-               (can?'<button class="pill" id="annexBtn">🏴 Annex (claim)</button>':'<button class="pill" disabled>🏴 Annex</button>')+
-               '</div>';
-         if(enemyOwned) body+='<div style="margin-top:6px;opacity:.8">You cannot annex foreign land (war not implemented yet).</div>';
-       }
-       body+='<div style="text-align:right;margin-top:10px"><button class="pill" id="closeTile">Close</button></div>';
-       tilePanel.innerHTML='<h3>'+title+'</h3>'+body;tilePanel.style.display='block';cityPanel.style.display='none';
-       document.getElementById('closeTile').onclick=function(){tilePanel.style.display='none'};
-       var annex=document.getElementById('annexBtn');
-       if(annex){annex.onclick=function(){
-         if(using2D){
-           var before=msSegments2D(playerFID);var beforeSet=new Set();
-           for(var s=0;s<before.length;s++){beforeSet.add(before[s].x0+','+before[s].y0+'|'+before[s].x1+','+before[s].y1)}
-           WORLD.owner[k]=playerFID; var after=msSegments2D(playerFID); var added=[];
-           for(var s2=0;s2<after.length;s2++){var key=after[s2].x0+','+after[s2].y0+'|'+after[s2].x1+','+after[s2].y1; var rev=after[s2].x1+','+after[s2].y1+'|'+after[s2].x0+','+after[s2].y0; if(!beforeSet.has(key)&&!beforeSet.has(rev)) added.push(after[s2])}
-           tilePanel.style.display='none'; drawMini(); drawWorld2D();
-         } else {
-           var beforeSegs=new Set(msSegments(playerFID).map(function(s){return s.a.x+","+s.a.z+"|"+s.b.x+","+s.b.z}));
-           WORLD.owner[k]=playerFID; var after3=msSegments(playerFID); var added3=[];
-           for(var i=0;i<after3.length;i++){var s3=after3[i]; var key3s=s3.a.x+","+s3.a.z+"|"+s3.b.x+","+s3.b.z; var key3r=s3.b.x+","+s3.b.z+"|"+s3.a.x+","+s3.a.z; if(!beforeSegs.has(key3s)&&!beforeSegs.has(key3r)) added3.push(s3)}
-           rebuildBordersSmooth(); playAnnexGrowTile(x,y,Factions[playerFID].color); playBorderGrowSegments(added3,Factions[playerFID].color);
-           tilePanel.style.display='none'; drawMini();
-         }
-       }}
-      }
 
       // ---------- Input (3D) ----------
       function bindInput3D(){var el=renderer.domElement;var pointers=new Map();var pinchD0=0;var target=new THREE.Vector3(0,0,0);var camDist=42;var camYaw=-Math.PI/4,camPitch=0.95;var downInfo={x:0,y:0,moved:false,id:null};
