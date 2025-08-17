@@ -1,0 +1,256 @@
+:root {
+  --bg: #0e1522;
+  --panel: #0f1a2a;
+  --ink: #e6eef7;
+  --br: #213754;
+  --accent: #3aa0ff;
+}
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family:
+    system-ui,
+    Segoe UI,
+    Roboto,
+    Arial,
+    sans-serif;
+}
+/* Top HUD (EU4-like) */
+#hudTop {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #1d304a;
+  background: linear-gradient(180deg, #0f1728, #0b1322);
+}
+#flag {
+  width: 28px;
+  height: 20px;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px #233a5a inset;
+}
+#countryName {
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.3px;
+}
+.resRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.hudChip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  background: #11243b;
+  border: 1px solid #2a4266;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 700;
+}
+.hudChip b {
+  min-width: 28px;
+  display: inline-block;
+  text-align: right;
+}
+/* Bottom-left controls */
+#controls {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid #24364f;
+  border-radius: 12px;
+  padding: 8px 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+#controls label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+#controls select {
+  background: #0f2137;
+  color: var(--ink);
+  border: 1px solid #2a4a76;
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-weight: 600;
+}
+#controls button {
+  background: #173054;
+  color: var(--ink);
+  border: 1px solid #2a4a76;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+/* Stage & panels */
+#stage {
+  position: relative;
+  height: calc(100vh - 64px);
+  overflow: hidden;
+}
+#mini {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 180px;
+  height: 128px;
+  border: 1px solid #22334a;
+  border-radius: 8px;
+  background: #0b1522;
+  image-rendering: pixelated;
+  z-index: 5;
+}
+.panel {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  min-width: 300px;
+  max-width: 420px;
+  background: #0f1a2a;
+  border: 1px solid #24364f;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 12px;
+  display: none;
+  z-index: 6;
+}
+.panel h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pill {
+  border: 1px solid #2a4266;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #132741;
+  cursor: pointer;
+}
+.pill[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.hud-note {
+  opacity: 0.7;
+  font-size: 12px;
+  margin: 4px 10px;
+}
+canvas {
+  touch-action: none;
+}
+#flat {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  right: 10px;
+  bottom: 10px;
+  border-radius: 8px;
+  display: none;
+}
+#err {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 99;
+  background: #7b1d1d;
+  color: #fff;
+  border: 1px solid #b54;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  border-radius: 10px;
+  padding: 10px;
+  display: none;
+  max-width: min(520px, 90vw);
+  white-space: pre-wrap;
+  font-family: ui-monospace, Consolas, monospace;
+}
+/* Tile panel richer UI */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+.kpi {
+  background: #11243b;
+  border: 1px solid #2a4266;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kpi b {
+  margin-left: auto;
+}
+.sep {
+  height: 1px;
+  background: #213754;
+  margin: 8px 0;
+}
+/* === Icon frames (for tile menus) === */
+.icon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+.icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 64px;
+}
+.icon-frame {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  padding: 6px;
+  background: linear-gradient(180deg, #10243c, #0d1a2b);
+  border: 2px solid #3a5a84;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 6px 14px rgba(0, 0, 0, 0.35);
+}
+.icon-frame img,
+.icon-frame span {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+.icon-frame span {
+  font-size: 28px;
+  line-height: 1;
+}
+.icon-frame.disabled {
+  opacity: 0.45;
+  filter: grayscale(0.2);
+}
+.icon-caption {
+  font-size: 12px;
+  margin-top: 4px;
+  opacity: 0.9;
+  text-align: center;
+}
