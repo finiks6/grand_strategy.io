@@ -474,6 +474,7 @@
 
       function biomeNameOf(x,y){var t=WORLD.data[idx(x,y)];return t===Biome.GRASS?'Çim':t===Biome.FOREST?'Orman':t===Biome.MOUNTAIN?'Dağ':(t===Biome.LAKE||t===Biome.RIVER)?'Su':'Kare'}
 
+      
       function showTilePanelXY(x,y){var k=idx(x,y),who=ownerOfXY(x,y),own=who===playerFID;var enemyOwned=(who>=0&&who!==playerFID);var isPlayerCap=(Factions[playerFID]&&Factions[playerFID].cap.x===x&&Factions[playerFID].cap.y===y);var title=(own?'🏳️ Bizim kare':(enemyOwned?'🚫 Başka ülkenin toprağı':'❓ Keşfedilmemiş/kontrol dışı'))+' — ('+x+','+y+')';var body='';
        if(own){
          body+='<div class="row"><span class="hudChip">👥 Nüfus: <b>0</b></span><span class="hudChip">💰 Gelir: <b>0</b></span><span class="hudChip">💸 Gider: <b>0</b></span></div>';
@@ -501,24 +502,7 @@
             iconHTML('village','Köy',true)+iconHTML('town','Kasaba',true)+iconHTML('city','Şehir',true)+
             '</div></div>';
        }
-       body+='<div style="text-align:right;margin-top:8px"><button class="pill" id="closeTile">Kapat</button></div>';
-       tilePanel.innerHTML='<h3>'+title+'</h3>'+body; tilePanel.style.display='block'; cityPanel.style.display='none';
-       document.getElementById('closeTile').onclick=function(){tilePanel.style.display='none'};
-       var annex=document.getElementById('annexBtn'); if(annex){ annex.onclick=function(){ var before=segKeySetFor(playerFID); WORLD.owner[k]=playerFID; var added=newSegmentsFor(playerFID,before); rebuildBordersSmooth(); // keep existing grow animation on top
-       playBorderGrowSegments(added, Factions[playerFID].color); tilePanel.style.display='none'; drawMini(); }; }
-      }
-         else { body+='<div class="row">'+builds.map(function(b){return '<button class="pill" disabled title="placeholder">'+b.label+'</button>'}).join('')+'</div>';}
-         body+='<div style="opacity:.7;margin-top:6px">(Building actions are placeholders for now.)</div>';
-       } else {
-         var can=isPlayerBorder(x,y)&&!enemyOwned;
-         body+='<div class="kpi">🧭 Biome <b>'+bname+'</b></div>';
-         body+='<div class="row" style="margin-top:6px">'+
-               '<button class="pill" disabled title="placeholder">🔎 Explore</button>'+
-               (can?'<button class="pill" id="annexBtn">🏴 Annex (claim)</button>':'<button class="pill" disabled>🏴 Annex</button>')+
-               '</div>';
-         if(enemyOwned) body+='<div style="margin-top:6px;opacity:.8">You cannot annex foreign land (war not implemented yet).</div>';
-       }
-       body+='<div style="text-align:right;margin-top:10px"><button class="pill" id="closeTile">Close</button></div>';
+       body+='<div style="text-align:right;margin-top:10px"><button class="pill" id="closeTile">Kapat</button></div>';
        tilePanel.innerHTML='<h3>'+title+'</h3>'+body;tilePanel.style.display='block';cityPanel.style.display='none';
        document.getElementById('closeTile').onclick=function(){tilePanel.style.display='none'};
        var annex=document.getElementById('annexBtn');
@@ -538,6 +522,7 @@
          }
        }}
       }
+
 
       // ---------- Input (3D) ----------
       function bindInput3D(){var el=renderer.domElement;var pointers=new Map();var pinchD0=0;var target=new THREE.Vector3(0,0,0);var camDist=42;var camYaw=-Math.PI/4,camPitch=0.95;var downInfo={x:0,y:0,moved:false,id:null};
