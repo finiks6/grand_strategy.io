@@ -2,18 +2,19 @@ import { Biome } from './biomes.js';
 
 export const Factions = [];
 
-export function seedPointsFor(w, h) {
-  const jit = (n) => ((Math.random() * n) | 0) - (n >> 1);
-  return [
-    { x: 2 + jit(2), y: 2 + jit(2) },
-    { x: w - 3 + jit(2), y: 2 + jit(2) },
-    { x: 2 + jit(2), y: h - 3 + jit(2) },
-    { x: w - 3 + jit(2), y: h - 3 + jit(2) },
-    { x: (w >> 1) + jit(6), y: 2 + jit(2) },
-    { x: w - 3 + jit(2), y: (h >> 1) + jit(6) },
-    { x: (w >> 1) + jit(6), y: h - 3 + jit(2) },
-    { x: 2 + jit(2), y: (h >> 1) + jit(6) },
+export function seedPointsFor(w, h, count = 8) {
+  const jitter = (n) => ((Math.random() * n) | 0) - (n >> 1);
+  const pts = [
+    { x: 2 + jitter(2), y: 2 + jitter(2) },
+    { x: w - 3 + jitter(2), y: 2 + jitter(2) },
+    { x: 2 + jitter(2), y: h - 3 + jitter(2) },
+    { x: w - 3 + jitter(2), y: h - 3 + jitter(2) },
+    { x: (w >> 1) + jitter(6), y: 2 + jitter(2) },
+    { x: w - 3 + jitter(2), y: (h >> 1) + jitter(6) },
+    { x: (w >> 1) + jitter(6), y: h - 3 + jitter(2) },
+    { x: 2 + jitter(2), y: (h >> 1) + jitter(6) },
   ];
+  return pts.slice(0, count);
 }
 
 export function seedFactions(capPts, WORLD, idx, playerFID, BORDER_R_INIT) {
@@ -30,10 +31,10 @@ export function seedFactions(capPts, WORLD, idx, playerFID, BORDER_R_INIT) {
     0xf472b6,
     0x60a5fa,
   ];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < capPts.length; i++) {
     const p = capPts[i];
-    const cx = Math.max(2, Math.min(w - 3, p.x)),
-      cy = Math.max(2, Math.min(h - 3, p.y));
+    const cx = Math.max(2, Math.min(w - 3, p.x));
+    const cy = Math.max(2, Math.min(h - 3, p.y));
     Factions.push({
       id: i,
       name: i === playerFID ? 'Our Country' : 'Faction ' + (i + 1),
