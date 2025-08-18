@@ -33,10 +33,11 @@ export function warTick() {
   tick++;
   const events = [];
 
-  // Recruit armies
+  // Recruit armies only if at war
   for (let i = 0; i < Factions.length; i++) {
     const F = Factions[i];
-    if (F.res.gold >= 5 && F.pop > 10) {
+    const atWar = Wars.some((w) => w.a === i || w.b === i);
+    if (atWar && F.res.gold >= 5 && F.pop > 10) {
       const recruits = Math.min(
         Math.floor(F.res.gold / 5),
         Math.floor(F.pop / 10),
@@ -47,7 +48,7 @@ export function warTick() {
         F.army = (F.army || 0) + recruits;
       }
     }
-    if (!Wars.some((w) => w.a === i || w.b === i)) {
+    if (!atWar) {
       F.morale = Math.min(100, (F.morale || 0) + 1);
     }
   }
