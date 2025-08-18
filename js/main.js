@@ -42,11 +42,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
           food: document.getElementById("hud-food"),
           wood: document.getElementById("hud-wood"),
           stone: document.getElementById("hud-stone"),
-          iron: document.getElementById("hud-iron"),
-          tools: document.getElementById("hud-tools"),
           pop: document.getElementById("hud-pop"),
-          army: document.getElementById("hud-army"),
-          morale: document.getElementById("hud-morale"),
           stability: document.getElementById("hud-stability"),
           prestige: document.getElementById("hud-prestige"),
           score: document.getElementById("hud-score"),
@@ -56,7 +52,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
 
         // ---------- Core state ----------
         var TILE = 1;
-        var WORLD = { w: 0, h: 0, data: [], elev: [], moist: [], owner: [] };
+        var WORLD = { w: 0, h: 0, data: [], elev: [], moist: [], owner: [], pop: [], settle: [] };
         function idx(x, y) {
           return y * WORLD.w + x;
         }
@@ -410,6 +406,8 @@ import { declareWar, warTick, resetWars } from "./war.js";
           WORLD.elev = new Array(N).fill(0);
           WORLD.moist = new Array(N).fill(0);
           WORLD.owner = new Array(N).fill(-1);
+          WORLD.pop = new Array(N).fill(0);
+          WORLD.settle = new Array(N).fill("");
           var P = normalizePercents(biomePercents(mode || BiomeMode.NORMAL));
           var nWater = Math.round(P.water * N),
             nMount = Math.round(P.mount * N),
@@ -1431,23 +1429,87 @@ import { declareWar, warTick, resetWars } from "./war.js";
         }
 
         // ---------- HUD update ----------
+        function totalPopOf(fid) {
+          var sum = 0;
+          for (var i = 0; i < WORLD.pop.length; i++)
+            if (WORLD.owner[i] === fid) sum += WORLD.pop[i];
+          return sum;
+        }
         function updateHUD() {
           var P = Factions[playerFID];
-          HUD.pop.textContent = P.pop | 0;
-          HUD.army.textContent = (P.army || 0) | 0;
-          HUD.morale.textContent = (P.morale || 0) | 0;
+          HUD.pop.textContent = totalPopOf(playerFID) | 0;
           HUD.food.textContent = P.res.food | 0;
           HUD.wood.textContent = P.res.wood | 0;
           HUD.gold.textContent = P.res.gold | 0;
           HUD.stone.textContent = P.res.stone | 0;
-          HUD.iron.textContent = P.res.iron | 0;
-          HUD.tools.textContent = P.res.tools | 0;
           HUD.stability.textContent = P.stability | 0;
           HUD.prestige.textContent = P.prestige | 0;
           HUD.score.textContent = P.score | 0;
           if (HUD.date)
             HUD.date.textContent =
               "Day " + day + " Month " + month + " Year " + year;
+        }
+
+        function tileTypeOf(k) {
+          var s = WORLD.settle[k];
+          if (s) return s;
+          var b = WORLD.data[k];
+          return b === Biome.GRASS
+            ? "plain"
+            : b === Biome.FOREST
+              ? "forest"
+              : b === Biome.MOUNTAIN
+                ? "mountain"
+                : "sea";
+        }
+        function targetPopOf(k) {
+          var t = tileTypeOf(k);
+          if (t === "city") return 5000;
+          if (t === "town") return 1000;
+          if (t === "village") return 500;
+          if (t === "plain") return 100;
+          if (t === "forest") return 75;
+          if (t === "mountain") return 50;
+          return 0;
+        }
+        function migrateTile(fid, k) {
+          var target = targetPopOf(k);
+          var cur = WORLD.pop[k] || 0;
+          var need = target - cur;
+          if (need <= 0) return;
+          var others = [];
+          var total = 0;
+          for (var i = 0; i < WORLD.pop.length; i++) {
+            if (i === k) continue;
+            if (WORLD.owner[i] === fid && WORLD.pop[i] > 0) {
+              others.push(i);
+              total += WORLD.pop[i];
+            }
+          }
+          if (total <= 0) return;
+          var received = 0;
+          for (var j = 0; j < others.length; j++) {
+            var i2 = others[j];
+            var share = Math.floor((need * WORLD.pop[i2]) / total);
+            share = Math.min(share, WORLD.pop[i2]);
+            WORLD.pop[i2] -= share;
+            received += share;
+          }
+          var rem = need - received;
+          if (rem > 0) {
+            others.sort(function (a, b) {
+              return WORLD.pop[b] - WORLD.pop[a];
+            });
+            for (var r = 0; r < others.length && rem > 0; r++) {
+              var i3 = others[r];
+              if (WORLD.pop[i3] > 0) {
+                WORLD.pop[i3]--;
+                received++;
+                rem--;
+              }
+            }
+          }
+          WORLD.pop[k] += received;
         }
 
         function updateWarLog(events) {
@@ -1560,14 +1622,14 @@ import { declareWar, warTick, resetWars } from "./war.js";
         function biomeNameOf(x, y) {
           var t = WORLD.data[idx(x, y)];
           return t === Biome.GRASS
-            ? "Çim"
+            ? "Grass"
             : t === Biome.FOREST
-              ? "Orman"
+              ? "Forest"
               : t === Biome.MOUNTAIN
-                ? "Dağ"
+                ? "Mountain"
                 : t === Biome.LAKE || t === Biome.RIVER
-                  ? "Su"
-                  : "Kare";
+                  ? "Water"
+                  : "Tile";
         }
 
         function showTilePanelXY(x, y) {
@@ -1581,10 +1643,10 @@ import { declareWar, warTick, resetWars } from "./war.js";
             Factions[playerFID].cap.y === y;
           var title =
             (own
-              ? "🏳️ Bizim kare"
+              ? "🏳️ Our tile"
               : enemyOwned
-                ? "🚫 Başka ülkenin toprağı"
-                : "❓ Keşfedilmemiş/kontrol dışı") +
+                ? "🚫 Other nation's land"
+                : "❓ Unexplored/unowned") +
             " — (" +
             x +
             "," +
@@ -1593,53 +1655,53 @@ import { declareWar, warTick, resetWars } from "./war.js";
           var body = "";
           if (own) {
             body +=
-              '<div class="row"><span class="hudChip">👥 Nüfus: <b>0</b></span><span class="hudChip">💰 Gelir: <b>0</b></span><span class="hudChip">💸 Gider: <b>0</b></span></div>';
+              '<div class="row"><span class="hudChip">👥 Population: <b>0</b></span><span class="hudChip">💰 Income: <b>0</b></span><span class="hudChip">💸 Expenses: <b>0</b></span></div>';
             body +=
-              '<div style="margin-top:8px"><b>🏙️ Yerleşim</b><div class="icon-grid">' +
-              iconHTML("village", "Köy", !isPlayerCap) +
-              iconHTML("town", "Kasaba", !isPlayerCap ? true : false) +
-              iconHTML("city", "Şehir", true) +
+              '<div style="margin-top:8px"><b>🏙️ Settlement</b><div class="icon-grid">' +
+              iconHTML("village", "Village", !isPlayerCap) +
+              iconHTML("town", "Town", !isPlayerCap ? true : false) +
+              iconHTML("city", "City", true) +
               "</div></div>";
             body +=
-              '<div style="margin-top:10px"><b>🛠️ Binalar</b><div class="icon-grid">' +
-              iconHTML("farm", "Çiftlik", true) +
-              iconHTML("lumber", "Keresteci", true) +
-              iconHTML("fishing", "Balıkçılık", true) +
-              iconHTML("stone", "Taş Madeni", true) +
-              iconHTML("coal", "Kömür Madeni", true) +
-              iconHTML("iron", "Demir Madeni", true) +
-              iconHTML("gold", "Altın Madeni", true) +
-              '</div><div style="opacity:.75;font-size:12px;margin-top:4px">(Şimdilik hepsi placeholder)</div></div>';
+              '<div style="margin-top:10px"><b>🛠️ Buildings</b><div class="icon-grid">' +
+              iconHTML("farm", "Farm", true) +
+              iconHTML("lumber", "Lumber Mill", true) +
+              iconHTML("fishing", "Fishing", true) +
+              iconHTML("stone", "Stone Mine", true) +
+              iconHTML("coal", "Coal Mine", true) +
+              iconHTML("iron", "Iron Mine", true) +
+              iconHTML("gold", "Gold Mine", true) +
+              '</div><div style="opacity:.75;font-size:12px;margin-top:4px">(All placeholders for now)</div></div>';
           } else {
             var can =
               isPlayerBorder(x, y) &&
               !enemyOwned &&
-              Factions[playerFID].res.gold >= 5; // yeni toprak 5 altın
+              Factions[playerFID].res.gold >= 5; // new tile costs 5 gold
             body +=
-              '<div class="row"><button class="pill" disabled>🔎 Keşfet (placeholder)</button>' +
+              '<div class="row"><button class="pill" disabled>🔎 Explore (placeholder)</button>' +
               (can
-                ? '<button class="pill" id="annexBtn">🏴 Kontrol Et (5 altın)</button>'
-                : '<button class="pill" disabled>🏴 Kontrol Et</button>') +
+                ? '<button class="pill" id="annexBtn">🏴 Annex (5 gold)</button>'
+                : '<button class="pill" disabled>🏴 Annex</button>') +
               "</div>";
             if (enemyOwned)
               body +=
-                '<div style="margin-top:6px;opacity:.8">Savaş sistemi gelene kadar başka ülkenin toprağı ilhak edilemez.</div>';
+                '<div style="margin-top:6px;opacity:.8">Cannot annex another country\'s land until the war system is implemented.</div>';
             body +=
-              '<div style="margin-top:10px"><b>📦 Mevcut/gelecek ikonlar</b><div class="icon-grid">' +
-              iconHTML("farm", "Çiftlik", true) +
-              iconHTML("lumber", "Keresteci", true) +
-              iconHTML("fishing", "Balıkçılık", true) +
-              iconHTML("stone", "Taş", true) +
-              iconHTML("coal", "Kömür", true) +
-              iconHTML("iron", "Demir", true) +
-              iconHTML("gold", "Altın", true) +
-              iconHTML("village", "Köy", true) +
-              iconHTML("town", "Kasaba", true) +
-              iconHTML("city", "Şehir", true) +
+              '<div style="margin-top:10px"><b>📦 Current/future icons</b><div class="icon-grid">' +
+              iconHTML("farm", "Farm", true) +
+              iconHTML("lumber", "Lumber Mill", true) +
+              iconHTML("fishing", "Fishing", true) +
+              iconHTML("stone", "Stone", true) +
+              iconHTML("coal", "Coal", true) +
+              iconHTML("iron", "Iron", true) +
+              iconHTML("gold", "Gold", true) +
+              iconHTML("village", "Village", true) +
+              iconHTML("town", "Town", true) +
+              iconHTML("city", "City", true) +
               "</div></div>";
           }
           body +=
-            '<div style="text-align:right;margin-top:10px"><button class="pill" id="closeTile">Kapat</button></div>';
+            '<div style="text-align:right;margin-top:10px"><button class="pill" id="closeTile">Close</button></div>';
           tilePanel.innerHTML = "<h3>" + title + "</h3>" + body;
           tilePanel.style.display = "block";
           cityPanel.style.display = "none";
@@ -1667,6 +1729,9 @@ import { declareWar, warTick, resetWars } from "./war.js";
                   );
                 }
                 WORLD.owner[k] = playerFID;
+                WORLD.pop[k] = 0;
+                WORLD.settle[k] = "";
+                migrateTile(playerFID, k);
                 var after = msSegments2D(playerFID);
                 var added = [];
                 for (var s2 = 0; s2 < after.length; s2++) {
@@ -1699,6 +1764,9 @@ import { declareWar, warTick, resetWars } from "./war.js";
                   }),
                 );
                 WORLD.owner[k] = playerFID;
+                WORLD.pop[k] = 0;
+                WORLD.settle[k] = "";
+                migrateTile(playerFID, k);
                 var after3 = msSegments(playerFID);
                 var added3 = [];
                 for (var i = 0; i < after3.length; i++) {
@@ -1716,6 +1784,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
                 tilePanel.style.display = "none";
                 drawMini();
               }
+              Factions[playerFID].pop = totalPopOf(playerFID);
               updateHUD();
             };
           }
@@ -1892,7 +1961,6 @@ import { declareWar, warTick, resetWars } from "./war.js";
           var caps = seedPointsFor(sz.w, sz.h);
           genMap(sz.w, sz.h, biomeSel.value, caps);
           seedFactions(caps, WORLD, idx, playerFID, BORDER_R_INIT);
-          if (Factions.length > 1) declareWar(0, 1);
         }
         function startGame() {
           try {

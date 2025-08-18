@@ -6,9 +6,11 @@ import { Biome } from './biomes.js';
 export function economyTick(WORLD, idx) {
   const yields = [];
   const bonuses = [];
+  const factionPop = [];
   for (let f = 0; f < Factions.length; f++) {
     yields[f] = { gold: 0, food: 0, wood: 0, stone: 0, iron: 0, luxury: 0 };
     bonuses[f] = 1 + Factions[f].res.tools * 0.05;
+    factionPop[f] = 0;
   }
   const w = WORLD.w, h = WORLD.h;
   for (let y = 0; y < h; y++) {
@@ -41,6 +43,38 @@ export function economyTick(WORLD, idx) {
           yields[fid].gold += 1;
           break;
       }
+      const t = WORLD.settle[k]
+        ? WORLD.settle[k]
+        : b === Biome.GRASS
+          ? 'plain'
+          : b === Biome.FOREST
+            ? 'forest'
+            : b === Biome.MOUNTAIN
+              ? 'mountain'
+              : 'sea';
+      let rate = 0;
+      switch (t) {
+        case 'city':
+          rate = 0.012;
+          break;
+        case 'town':
+          rate = 0.01;
+          break;
+        case 'village':
+          rate = 0.008;
+          break;
+        case 'plain':
+          rate = 0.006;
+          break;
+        case 'forest':
+          rate = 0.004;
+          break;
+        case 'mountain':
+          rate = 0.002;
+          break;
+      }
+      WORLD.pop[k] = Math.floor(WORLD.pop[k] * (1 + rate));
+      factionPop[fid] += WORLD.pop[k];
     }
   }
   for (let f = 0; f < Factions.length; f++) {
@@ -68,8 +102,7 @@ export function economyTick(WORLD, idx) {
       F.res.iron -= craft * 2;
       F.res.tools += craft;
     }
-    // population grows by 0.5% each month
-    F.pop = Math.floor(F.pop * 1.005);
+    F.pop = factionPop[f];
     // capital generates gold based on population
     F.res.gold += F.pop * 0.001;
     F.score =

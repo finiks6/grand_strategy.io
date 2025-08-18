@@ -49,7 +49,7 @@ export function seedFactions(capPts, WORLD, idx, playerFID, BORDER_R_INIT) {
         tools: 0,
         luxury: 0,
       },
-      pop: 1000,
+      pop: 0,
       army: 0,
       morale: 100,
       stability: 50,
@@ -60,14 +60,35 @@ export function seedFactions(capPts, WORLD, idx, playerFID, BORDER_R_INIT) {
   for (let f = 0; f < Factions.length; f++) {
     const F = Factions[f];
     WORLD.data[idx(F.cap.x, F.cap.y)] = Biome.GRASS;
+    WORLD.owner[idx(F.cap.x, F.cap.y)] = F.id;
+    WORLD.pop[idx(F.cap.x, F.cap.y)] = 1000;
+    WORLD.settle[idx(F.cap.x, F.cap.y)] = 'town';
     for (let y = 0; y < h; y++)
       for (let x = 0; x < w; x++) {
         const d = Math.max(Math.abs(x - F.cap.x), Math.abs(y - F.cap.y));
         if (d > 0 && d <= BORDER_R_INIT) {
           const k = idx(x, y);
-          if (WORLD.owner[k] === -1) WORLD.owner[k] = F.id;
+          if (WORLD.owner[k] === -1) {
+            WORLD.owner[k] = F.id;
+            switch (WORLD.data[k]) {
+              case Biome.GRASS:
+                WORLD.pop[k] = 100;
+                break;
+              case Biome.FOREST:
+                WORLD.pop[k] = 75;
+                break;
+              case Biome.MOUNTAIN:
+                WORLD.pop[k] = 50;
+                break;
+              default:
+                WORLD.pop[k] = 0;
+            }
+          }
         }
       }
-    WORLD.owner[idx(F.cap.x, F.cap.y)] = F.id;
+  }
+  for (let i = 0; i < WORLD.pop.length; i++) {
+    const fid = WORLD.owner[i];
+    if (fid >= 0) Factions[fid].pop += WORLD.pop[i];
   }
 }
