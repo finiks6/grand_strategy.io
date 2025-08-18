@@ -43,6 +43,7 @@ export function seedFactions(capPts, WORLD, idx, playerFID, BORDER_R_INIT) {
       res: {
         gold: 10,
         food: 10,
+        goods: 10,
         wood: 10,
         stone: 10,
         iron: 0,

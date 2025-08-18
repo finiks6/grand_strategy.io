@@ -40,6 +40,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
         var HUD = {
           gold: document.getElementById("hud-gold"),
           food: document.getElementById("hud-food"),
+          goods: document.getElementById("hud-goods"),
           wood: document.getElementById("hud-wood"),
           stone: document.getElementById("hud-stone"),
           pop: document.getElementById("hud-pop"),
@@ -52,7 +53,17 @@ import { declareWar, warTick, resetWars } from "./war.js";
 
         // ---------- Core state ----------
         var TILE = 1;
-        var WORLD = { w: 0, h: 0, data: [], elev: [], moist: [], owner: [], pop: [], settle: [] };
+        var WORLD = {
+          w: 0,
+          h: 0,
+          data: [],
+          elev: [],
+          moist: [],
+          owner: [],
+          pop: [],
+          settle: [],
+          build: {},
+        };
         function idx(x, y) {
           return y * WORLD.w + x;
         }
@@ -86,6 +97,14 @@ import { declareWar, warTick, resetWars } from "./war.js";
           borderAnims = [];
         var playerFID = 0;
         var BORDER_R_INIT = 1; // radius 1 => 9 tiles total
+
+        var camTarget = null,
+          camDist = 42,
+          camYaw = -Math.PI / 4,
+          camPitch = 0.95;
+        var keyState = {};
+        var selectionBox = null,
+          selectedTiles = [];
 
         // ---------- Math helpers ----------
         var clamp = function (v, a, b) {
@@ -159,7 +178,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
           selection = new THREE.Mesh(
             new THREE.PlaneGeometry(1.02, 1.02),
             new THREE.MeshBasicMaterial({
-              color: 0xffff66,
+              color: 0xffffff,
               transparent: true,
               opacity: 0.45,
             }),
@@ -408,6 +427,14 @@ import { declareWar, warTick, resetWars } from "./war.js";
           WORLD.owner = new Array(N).fill(-1);
           WORLD.pop = new Array(N).fill(0);
           WORLD.settle = new Array(N).fill("");
+          WORLD.build = {
+            fishery: new Array(N).fill(0),
+            stoneMine: new Array(N).fill(0),
+            lumberCamp: new Array(N).fill(0),
+            farm: new Array(N).fill(0),
+            workshop: new Array(N).fill(0),
+            market: new Array(N).fill(0),
+          };
           var P = normalizePercents(biomePercents(mode || BiomeMode.NORMAL));
           var nWater = Math.round(P.water * N),
             nMount = Math.round(P.mount * N),
@@ -1439,6 +1466,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
           var P = Factions[playerFID];
           HUD.pop.textContent = totalPopOf(playerFID) | 0;
           HUD.food.textContent = P.res.food | 0;
+          HUD.goods.textContent = P.res.goods | 0;
           HUD.wood.textContent = P.res.wood | 0;
           HUD.gold.textContent = P.res.gold | 0;
           HUD.stone.textContent = P.res.stone | 0;
@@ -1652,26 +1680,35 @@ import { declareWar, warTick, resetWars } from "./war.js";
             "," +
             y +
             ")";
-          var body = "";
+          var pop = WORLD.pop[k] || 0;
+          var biomeN = biomeNameOf(x, y);
+          var body =
+            '<div class="row"><span class="hudChip">🗺️ ' +
+            biomeN +
+            '</span><span class="hudChip">👥 Population: <b>' +
+            pop +
+            '</b></span></div>';
           if (own) {
             body +=
-              '<div class="row"><span class="hudChip">👥 Population: <b>0</b></span><span class="hudChip">💰 Income: <b>0</b></span><span class="hudChip">💸 Expenses: <b>0</b></span></div>';
+              '<div class="row" style="margin-top:4px"><span class="hudChip">💰 Income: <b>0</b></span><span class="hudChip">💸 Expenses: <b>0</b></span></div>';
             body +=
               '<div style="margin-top:8px"><b>🏙️ Settlement</b><div class="icon-grid">' +
               iconHTML("village", "Village", !isPlayerCap) +
               iconHTML("town", "Town", !isPlayerCap ? true : false) +
               iconHTML("city", "City", true) +
               "</div></div>";
+            var B = WORLD.build;
+            var built = [];
+            if (B.farm[k]) built.push("Farm Lv" + B.farm[k]);
+            if (B.lumberCamp[k]) built.push("Lumber Camp Lv" + B.lumberCamp[k]);
+            if (B.fishery[k]) built.push("Fishery Lv" + B.fishery[k]);
+            if (B.stoneMine[k]) built.push("Stone Mine Lv" + B.stoneMine[k]);
+            if (B.workshop[k]) built.push("Workshop Lv" + B.workshop[k]);
+            if (B.market[k]) built.push("Market Lv" + B.market[k]);
             body +=
-              '<div style="margin-top:10px"><b>🛠️ Buildings</b><div class="icon-grid">' +
-              iconHTML("farm", "Farm", true) +
-              iconHTML("lumber", "Lumber Mill", true) +
-              iconHTML("fishing", "Fishing", true) +
-              iconHTML("stone", "Stone Mine", true) +
-              iconHTML("coal", "Coal Mine", true) +
-              iconHTML("iron", "Iron Mine", true) +
-              iconHTML("gold", "Gold Mine", true) +
-              '</div><div style="opacity:.75;font-size:12px;margin-top:4px">(All placeholders for now)</div></div>';
+              '<div style="margin-top:10px"><b>🛠️ Buildings</b><div>' +
+              (built.length ? built.join(", ") : "None") +
+              "</div></div>";
           } else {
             var can =
               isPlayerBorder(x, y) &&
@@ -1795,18 +1832,24 @@ import { declareWar, warTick, resetWars } from "./war.js";
           var el = renderer.domElement;
           var pointers = new Map();
           var pinchD0 = 0;
-          var target = new THREE.Vector3(0, 0, 0);
-          var camDist = 42;
-          var camYaw = -Math.PI / 4,
-            camPitch = 0.95;
+          camTarget = new THREE.Vector3(0, 0, 0);
+          camDist = 42;
+          camYaw = -Math.PI / 4;
+          camPitch = 0.95;
+          selectionBox = document.createElement("div");
+          selectionBox.style.position = "absolute";
+          selectionBox.style.border = "1px solid #fff";
+          selectionBox.style.pointerEvents = "none";
+          selectionBox.style.display = "none";
+          stage.appendChild(selectionBox);
           var downInfo = { x: 0, y: 0, moved: false, id: null };
           function updateCam() {
             camera.position.set(
-              target.x + camDist * Math.cos(camYaw) * Math.cos(camPitch),
-              target.y + camDist * Math.sin(camPitch),
-              target.z + camDist * Math.sin(camYaw) * Math.cos(camPitch),
+              camTarget.x + camDist * Math.cos(camYaw) * Math.cos(camPitch),
+              camTarget.y + camDist * Math.sin(camPitch),
+              camTarget.z + camDist * Math.sin(camYaw) * Math.cos(camPitch),
             );
-            camera.lookAt(target);
+            camera.lookAt(camTarget);
           }
           function screenToWorldTile(clientX, clientY) {
             var r = renderer.domElement.getBoundingClientRect();
@@ -1830,6 +1873,8 @@ import { declareWar, warTick, resetWars } from "./war.js";
               worldOrigin.z + t.y * TILE,
             );
             selection.visible = true;
+            selection.scale.set(1, 1, 1);
+            selectedTiles = [{ x: t.x, y: t.y }];
             showTilePanelXY(t.x, t.y);
           }
           var opt = { passive: false };
@@ -1844,6 +1889,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
                 moved: false,
                 id: e.pointerId,
               };
+              selectionBox.style.display = "none";
               e.preventDefault();
             },
             opt,
@@ -1853,8 +1899,6 @@ import { declareWar, warTick, resetWars } from "./war.js";
             function (e) {
               var p = pointers.get(e.pointerId);
               if (!p) return;
-              var dx = e.clientX - p.x,
-                dy = e.clientY - p.y;
               pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
               if (pointers.size === 1) {
                 var dist = Math.hypot(
@@ -1862,18 +1906,18 @@ import { declareWar, warTick, resetWars } from "./war.js";
                   e.clientY - downInfo.y,
                 );
                 if (dist > 6) downInfo.moved = true;
-                var k = 0.0025 * camDist;
-                var forward = new THREE.Vector3();
-                camera.getWorldDirection(forward);
-                forward.y = 0;
-                forward.normalize();
-                var right = new THREE.Vector3();
-                right
-                  .crossVectors(forward, new THREE.Vector3(0, 1, 0))
-                  .normalize();
-                target.addScaledVector(right, -dx * k);
-                target.addScaledVector(forward, dy * k);
-                updateCam();
+                if (downInfo.moved) {
+                  var r = stage.getBoundingClientRect();
+                  var x = Math.min(e.clientX, downInfo.x) - r.left;
+                  var y = Math.min(e.clientY, downInfo.y) - r.top;
+                  var w = Math.abs(e.clientX - downInfo.x);
+                  var h = Math.abs(e.clientY - downInfo.y);
+                  selectionBox.style.left = x + "px";
+                  selectionBox.style.top = y + "px";
+                  selectionBox.style.width = w + "px";
+                  selectionBox.style.height = h + "px";
+                  selectionBox.style.display = "block";
+                }
               } else if (pointers.size === 2) {
                 downInfo.moved = true;
                 var ps = Array.from(pointers.values());
@@ -1899,6 +1943,34 @@ import { declareWar, warTick, resetWars } from "./war.js";
               var treatedAsClick = !downInfo.moved && dist <= 6;
               if (treatedAsClick) {
                 handleClick(e.clientX, e.clientY);
+              } else if (downInfo.moved) {
+                selectionBox.style.display = "none";
+                var x0 = Math.min(e.clientX, downInfo.x);
+                var y0 = Math.min(e.clientY, downInfo.y);
+                var x1 = Math.max(e.clientX, downInfo.x);
+                var y1 = Math.max(e.clientY, downInfo.y);
+                var t0 = screenToWorldTile(x0, y0);
+                var t1 = screenToWorldTile(x1, y1);
+                if (t0 && t1) {
+                  var minX = Math.min(t0.x, t1.x);
+                  var maxX = Math.max(t0.x, t1.x);
+                  var minY = Math.min(t0.y, t1.y);
+                  var maxY = Math.max(t0.y, t1.y);
+                  var cx = (minX + maxX) / 2;
+                  var cy = (minY + maxY) / 2;
+                  var y0s = WORLD.elev[idx(Math.round(cx), Math.round(cy))] * 0.12;
+                  selection.position.set(
+                    worldOrigin.x + cx * TILE,
+                    y0s + 0.051,
+                    worldOrigin.z + cy * TILE,
+                  );
+                  selection.scale.set(maxX - minX + 1, 1, maxY - minY + 1);
+                  selection.visible = true;
+                  selectedTiles = [];
+                  for (var yy = minY; yy <= maxY; yy++)
+                    for (var xx = minX; xx <= maxX; xx++)
+                      selectedTiles.push({ x: xx, y: yy });
+                }
               }
             }
           }
@@ -1920,13 +1992,19 @@ import { declareWar, warTick, resetWars } from "./war.js";
           el.addEventListener("dblclick", function (e) {
             var t = screenToWorldTile(e.clientX, e.clientY);
             if (t) {
-              target.set(
+              camTarget.set(
                 worldOrigin.x + t.x * TILE,
                 0,
                 worldOrigin.z + t.y * TILE,
               );
               updateCam();
             }
+          });
+          window.addEventListener("keydown", function (e) {
+            keyState[e.key.toLowerCase()] = true;
+          });
+          window.addEventListener("keyup", function (e) {
+            keyState[e.key.toLowerCase()] = false;
           });
           ["touchstart", "touchmove", "touchend"].forEach(function (ev) {
             el.addEventListener(
@@ -2055,42 +2133,62 @@ import { declareWar, warTick, resetWars } from "./war.js";
               playerCrown.position.y = by + Math.sin(tSec * 2.4) * 0.06;
             }
             // border anims
-            for (var i = borderAnims.length - 1; i >= 0; i--) {
-              var A = borderAnims[i];
-              A.t += dtms;
-              var k = Math.min(1, A.t / A.dur);
-              if (A.type === "tilefill") {
-                var e = 1 - Math.pow(1 - k, 3);
-                A.node.scale.set(e, e, e);
-                A.node.material.opacity = 0.35 * (1 - k);
-                if (k >= 1) {
-                  scene.remove(A.node);
-                  A.node.traverse(disposeNode);
-                  borderAnims.splice(i, 1);
-                }
-              } else if (A.type === "grow") {
-                var easeOut = 1 - Math.pow(1 - k, 3);
-                var s = 0.2 + 0.8 * easeOut;
-                A.node.scale.setScalar(s);
-                A.node.children.forEach(function (m, idx) {
-                  m.material.opacity =
-                    idx === 1 ? 0.25 + 0.65 * easeOut : 0.1 + 0.2 * easeOut;
-                });
-                if (k >= 1) {
-                  scene.remove(A.node);
-                  A.node.traverse(disposeNode);
-                  borderAnims.splice(i, 1);
+              for (var i = borderAnims.length - 1; i >= 0; i--) {
+                var A = borderAnims[i];
+                A.t += dtms;
+                var k = Math.min(1, A.t / A.dur);
+                if (A.type === "tilefill") {
+                  var e = 1 - Math.pow(1 - k, 3);
+                  A.node.scale.set(e, e, e);
+                  A.node.material.opacity = 0.35 * (1 - k);
+                  if (k >= 1) {
+                    scene.remove(A.node);
+                    A.node.traverse(disposeNode);
+                    borderAnims.splice(i, 1);
+                  }
+                } else if (A.type === "grow") {
+                  var easeOut = 1 - Math.pow(1 - k, 3);
+                  var s = 0.2 + 0.8 * easeOut;
+                  A.node.scale.setScalar(s);
+                  A.node.children.forEach(function (m, idx) {
+                    m.material.opacity =
+                      idx === 1 ? 0.25 + 0.65 * easeOut : 0.1 + 0.2 * easeOut;
+                  });
+                  if (k >= 1) {
+                    scene.remove(A.node);
+                    A.node.traverse(disposeNode);
+                    borderAnims.splice(i, 1);
+                  }
                 }
               }
             }
-          }
 
-          if (using2D) {
-            drawWorld2D();
-          } else if (WGLReady) {
-            renderer.render(scene, camera);
-          }
-          requestAnimationFrame(tick);
+            if (camTarget) {
+              var move = (dtms / 16) * 0.05 * camDist;
+              var forward = new THREE.Vector3();
+              camera.getWorldDirection(forward);
+              forward.y = 0;
+              forward.normalize();
+              var right = new THREE.Vector3();
+              right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+              if (keyState["w"]) camTarget.addScaledVector(forward, move);
+              if (keyState["s"]) camTarget.addScaledVector(forward, -move);
+              if (keyState["a"]) camTarget.addScaledVector(right, move);
+              if (keyState["d"]) camTarget.addScaledVector(right, -move);
+              camera.position.set(
+                camTarget.x + camDist * Math.cos(camYaw) * Math.cos(camPitch),
+                camTarget.y + camDist * Math.sin(camPitch),
+                camTarget.z + camDist * Math.sin(camYaw) * Math.cos(camPitch),
+              );
+              camera.lookAt(camTarget);
+            }
+
+            if (using2D) {
+              drawWorld2D();
+            } else if (WGLReady) {
+              renderer.render(scene, camera);
+            }
+            requestAnimationFrame(tick);
         }
         requestAnimationFrame(tick);
       })();
