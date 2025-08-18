@@ -51,26 +51,6 @@ import { declareWar, warTick, resetWars } from "./war.js";
         };
         var WARLOG = document.getElementById("warLog");
 
-        // ---------- Basic gameplay constants ----------
-        var BUILD_BASE_COST = {
-          farm: 5,
-          lumber: 5,
-          fishing: 5,
-          stone: 5,
-          workshop: 8,
-          market: 10,
-        };
-        var SETTLE_COST = { village: 20, town: 50, city: 100 };
-        var MAX_BUILD_LEVEL = 10;
-        var BUILD_KEY_TO_FIELD = {
-          farm: "farm",
-          lumber: "lumberCamp",
-          fishing: "fishery",
-          stone: "stoneMine",
-          workshop: "workshop",
-          market: "market",
-        };
-
         // ---------- Core state ----------
         var TILE = 1;
         var WORLD = {
@@ -1063,7 +1043,9 @@ import { declareWar, warTick, resetWars } from "./war.js";
               map: texGrass,
               roughness: 0.85,
               metalness: 0.05,
-            }));
+            
+  updateCamLimit();
+}));
           var matForest =
             renderCache.matForest ||
             (renderCache.matForest = new THREE.MeshStandardMaterial({
@@ -1659,20 +1641,14 @@ import { declareWar, warTick, resetWars } from "./war.js";
         function iconURL(key) {
           return ICONS[key] || emojiSVG(EMOJI[key] || "❓");
         }
-        function iconHTML(key, label, disabled, attrs) {
+        function iconHTML(key, label, disabled) {
           var cls = disabled ? "disabled" : "";
           var imgHTML = ICONS[key]
             ? "<img src='" + iconURL(key) + "' alt='" + label + "'>"
             : "<span>" + (EMOJI[key] || "❓") + "</span>";
-          var extra = attrs || "";
-          var disAttr = disabled ? " data-disabled='1'" : "";
-          return (
-            '<div class="icon" title="' +
+          return ('<div class="icon" data-key="' + key + '" title="' +
             label +
-            '" ' +
-            extra +
-            disAttr +
-            '><div class="icon-frame ' +
+            '"><div class="icon-frame ' +
             cls +
             '">' +
             imgHTML +
@@ -1704,43 +1680,110 @@ import { declareWar, warTick, resetWars } from "./war.js";
                   : "Tile";
         }
 
-        function buildAt(x, y, key) {
-          var field = BUILD_KEY_TO_FIELD[key];
-          if (!field) return;
-          var k = idx(x, y);
-          if (WORLD.owner[k] !== playerFID) return;
-          var lvl = WORLD.build[field][k] || 0;
-          if (lvl >= MAX_BUILD_LEVEL) return;
-          var cost = BUILD_BASE_COST[key] * (lvl + 1);
-          var P = Factions[playerFID];
-          if (P.res.gold < cost) return;
-          P.res.gold -= cost;
-          WORLD.build[field][k] = lvl + 1;
-          updateHUD();
-          showTilePanelXY(x, y);
-        }
+        
+// ---- Tile stats helper ----
+function computeTileStatsFor(k) {
+  var pop = WORLD.pop[k] || 0;
+  var biome = WORLD.data[k];
+  var B = WORLD.build;
+  var marketBuilt = B.market[k] > 0;
+  var employed = { fishery:0, stoneMine:0, lumberCamp:0, farm:0, workshop:0, market:0 };
+  var avail = pop;
+  function employ(level) {
+    var workers = Math.min(10, avail);
+    avail -= workers;
+    return workers;
+  }
+  if (marketBuilt) {
+    if (B.fishery[k] && (biome === Biome.LAKE || biome === Biome.RIVER)) {
+      employed.fishery = employ(B.fishery[k]);
+    }
+    if (B.stoneMine[k]) {
+      if (biome === Biome.MOUNTAIN) employed.stoneMine = employ(B.stoneMine[k]);
+      else if (biome === Biome.GRASS || biome === Biome.FOREST) employed.stoneMine = employ(B.stoneMine[k]);
+    }
+    if (B.lumberCamp[k]) {
+      if (biome === Biome.FOREST) employed.lumberCamp = employ(B.lumberCamp[k]);
+      else if (biome === Biome.GRASS || biome === Biome.MOUNTAIN) employed.lumberCamp = employ(B.lumberCamp[k]);
+    }
+    if (B.farm[k]) {
+      if (biome === Biome.GRASS) employed.farm = employ(B.farm[k]);
+      else if (biome === Biome.FOREST || biome === Biome.MOUNTAIN) employed.farm = employ(B.farm[k]);
+    }
+    if (B.workshop[k] && WORLD.settle[k]) {
+      employed.workshop = employ(B.workshop[k]);
+    }
+    employed.market = employ(B.market[k]); // market clerks/bureaucrats
+  }
+  var baseRate = 0;
+  var t = WORLD.settle[k]
+    ? WORLD.settle[k]
+    : (biome === Biome.GRASS ? 'plain' : biome === Biome.FOREST ? 'forest' : biome === Biome.MOUNTAIN ? 'mountain' : 'sea');
+  switch (t) {
+    case 'city': baseRate = 0.012; break;
+    case 'town': baseRate = 0.01; break;
+    case 'village': baseRate = 0.008; break;
+    case 'plain': baseRate = 0.006; break;
+    case 'forest': baseRate = 0.004; break;
+    case 'mountain': baseRate = 0.002; break;
+    default: baseRate = 0;
+  }
+  var F = Factions[WORLD.owner[k]] || null;
+  var shortage = false;
+  if (F && marketBuilt) {
+    var fFood = F.res.food, fGoods = F.res.goods;
+    // economyTick clamps negatives to zero afterwards; treat negative as shortage signal
+    shortage = (fFood < 0) || (fGoods < 0);
+  }
+  var effRate = shortage ? -0.005 : baseRate;
+  return { pop: pop, employed: employed, baseRate: baseRate, effectiveRate: effRate, hasMarket: marketBuilt, type: t };
+}
 
-        function upgradeSettlementAt(x, y, target) {
-          var order = ["", "village", "town", "city"];
-          var k = idx(x, y);
-          var curr = WORLD.settle[k] || "";
-          var ci = order.indexOf(curr);
-          var ti = order.indexOf(target);
-          if (ti !== ci + 1) return;
-          var cost = SETTLE_COST[target] || 0;
-          var P = Factions[playerFID];
-          if (P.res.gold < cost) return;
-          P.res.gold -= cost;
-          WORLD.settle[k] = target;
-          if (target === "village" && WORLD.pop[k] < 200) WORLD.pop[k] = 200;
-          if (target === "town" && WORLD.pop[k] < 1000) WORLD.pop[k] = 1000;
-          if (target === "city" && WORLD.pop[k] < 5000) WORLD.pop[k] = 5000;
-          Factions[playerFID].pop = totalPopOf(playerFID);
-          updateHUD();
-          showTilePanelXY(x, y);
-        }
+function bindTilePanelHandlers(k) {
+  if (!tilePanel) return;
+  // Remove previous handler if any by cloning
+  var clone = tilePanel.cloneNode(true);
+  tilePanel.parentNode.replaceChild(clone, tilePanel);
+  tilePanel = clone;
+  tilePanel.dataset.k = String(k);
+  tilePanel.addEventListener('click', function(ev){
+    var frame = ev.target.closest && ev.target.closest('.icon');
+    if (!frame) return;
+    var key = frame.getAttribute('data-key');
+    if (!key) return;
+    var kk = parseInt(tilePanel.dataset.k, 10);
+    var fid = WORLD.owner[kk];
+    if (fid !== playerFID) return; // only own tiles for now
+    var biome = WORLD.data[kk];
+    var B = WORLD.build;
+    if (key === 'village' || key === 'town' || key === 'city') {
+      WORLD.settle[kk] = key;
+      migrateTile(playerFID, kk);
+      showTilePanelXY(idxToXY(kk).x, idxToXY(kk).y);
+      return;
+    }
+    // Buildings: increment level up to 11
+    function inc(key2) {
+      var cur = (B[key2][kk] | 0);
+      B[key2][kk] = Math.min(11, cur + 1);
+    }
+    if (key === 'farm') inc('farm');
+    else if (key === 'lumber') inc('lumberCamp');
+    else if (key === 'fishing') inc('fishery');
+    else if (key === 'stone') inc('stoneMine');
+    else if (key === 'workshop') { if (WORLD.settle[kk]) inc('workshop'); }
+    else if (key === 'market') inc('market');
+    showTilePanelXY(idxToXY(kk).x, idxToXY(kk).y);
+  });
+}
 
-        function showTilePanelXY(x, y) {
+function idxToXY(k){
+  var x = k % WORLD.w;
+  var y = (k / WORLD.w) | 0;
+  return {x:x,y:y};
+}
+
+function showTilePanelXY(x, y) {
           var k = idx(x, y),
             who = ownerOfXY(x, y),
             own = who === playerFID;
@@ -1767,67 +1810,32 @@ import { declareWar, warTick, resetWars } from "./war.js";
             biomeN +
             '</span><span class="hudChip">👥 Population: <b>' +
             pop +
-            '</b></span></div>';
-            if (own) {
-              var P = Factions[playerFID];
+            '</b></span>+'<span class="hudChip">📈 Growth: <b>' + (computeTileStatsFor(k).effectiveRate*100).toFixed(1) + '%</b></span>'+'</div>'
+          if (own) {
+            body +=
+              '<div class="row" style="margin-top:4px"><span class="hudChip">💰 Income: <b>0</b></span><span class="hudChip">💸 Expenses: <b>0</b></span></div>';
+            body +=
+              '<div style="margin-top:8px"><b>🏙️ Settlement</b><div class="icon-grid">' +
+              iconHTML("village", "Village", !isPlayerCap) +
+              iconHTML("town", "Town", !isPlayerCap ? true : false) +
+              iconHTML("city", "City", true) +
+              "</div></div>";
+            var B = WORLD.build;
+            var built = [];
+            if (B.farm[k]) built.push("Farm Lv" + B.farm[k]);
+            if (B.lumberCamp[k]) built.push("Lumber Camp Lv" + B.lumberCamp[k]);
+            if (B.fishery[k]) built.push("Fishery Lv" + B.fishery[k]);
+            if (B.stoneMine[k]) built.push("Stone Mine Lv" + B.stoneMine[k]);
+            if (B.workshop[k]) built.push("Workshop Lv" + B.workshop[k]);
+            if (B.market[k]) built.push("Market Lv" + B.market[k]);
+            body +=
+              '<div style="margin-top:10px"><b>🛠️ Buildings</b><div>' +
+              (built.length ? built.join(", ") : "None") +
+              "</div></div>";
+            if (!B.market[k])
               body +=
-                '<div class="row" style="margin-top:4px"><span class="hudChip">💰 Income: <b>0</b></span><span class="hudChip">💸 Expenses: <b>0</b></span></div>';
-              var sett = WORLD.settle[k] || "";
-              var order = ["", "village", "town", "city"];
-              var si = order.indexOf(sett);
-              body +=
-                '<div style="margin-top:8px"><b>🏙️ Settlement</b><div class="icon-grid">' +
-                iconHTML(
-                  "village",
-                  "Village (" + SETTLE_COST.village + "g)",
-                  !(si === 0 && P.res.gold >= SETTLE_COST.village),
-                  'data-settle="village"',
-                ) +
-                iconHTML(
-                  "town",
-                  "Town (" + SETTLE_COST.town + "g)",
-                  !(si === 1 && P.res.gold >= SETTLE_COST.town),
-                  'data-settle="town"',
-                ) +
-                iconHTML(
-                  "city",
-                  "City (" + SETTLE_COST.city + "g)",
-                  !(si === 2 && P.res.gold >= SETTLE_COST.city),
-                  'data-settle="city"',
-                ) +
-                "</div></div>";
-              var B = WORLD.build;
-              var builds = [
-                { key: "farm", field: "farm", label: "Farm" },
-                { key: "lumber", field: "lumberCamp", label: "Lumber Camp" },
-                { key: "fishing", field: "fishery", label: "Fishery" },
-                { key: "stone", field: "stoneMine", label: "Stone Mine" },
-                { key: "workshop", field: "workshop", label: "Workshop" },
-                { key: "market", field: "market", label: "Market" },
-              ];
-              body +=
-                '<div style="margin-top:10px"><b>🛠️ Build</b><div class="icon-grid">';
-              for (var i = 0; i < builds.length; i++) {
-                var info = builds[i];
-                var lvl = B[info.field][k] || 0;
-                var cost = BUILD_BASE_COST[info.key] * (lvl + 1);
-                var dis = lvl >= MAX_BUILD_LEVEL || P.res.gold < cost;
-                var lbl =
-                  info.label +
-                  (lvl ? " Lv" + lvl : "") +
-                  " (" + cost + "g)";
-                body += iconHTML(
-                  info.key,
-                  lbl,
-                  dis,
-                  'data-build="' + info.key + '"',
-                );
-              }
-              body += "</div></div>";
-              if (!B.market[k])
-                body +=
-                  '<div style="margin-top:6px;opacity:.8">No market — resources stay local</div>';
-            } else {
+                '<div style="margin-top:6px;opacity:.8">No market — resources stay local</div>';
+          } else {
             var can =
               isPlayerBorder(x, y) &&
               !enemyOwned &&
@@ -1857,7 +1865,9 @@ import { declareWar, warTick, resetWars } from "./war.js";
           }
           body +=
             '<div style="text-align:right;margin-top:10px"><button class="pill" id="closeTile">Close</button></div>';
-          tilePanel.innerHTML = "<h3>" + title + "</h3>" + body;
+          tilePanel.innerHTML = "<h3>" + titl
+  bindTilePanelHandlers(k);
+e + "</h3>" + body;
           tilePanel.style.display = "block";
           cityPanel.style.display = "none";
           document.getElementById("closeTile").onclick = function () {
@@ -1943,18 +1953,6 @@ import { declareWar, warTick, resetWars } from "./war.js";
               updateHUD();
             };
           }
-          tilePanel.querySelectorAll('[data-build]').forEach(function (btn) {
-            if (btn.dataset.disabled) return;
-            btn.addEventListener('click', function () {
-              buildAt(x, y, btn.getAttribute('data-build'));
-            });
-          });
-          tilePanel.querySelectorAll('[data-settle]').forEach(function (btn) {
-            if (btn.dataset.disabled) return;
-            btn.addEventListener('click', function () {
-              upgradeSettlementAt(x, y, btn.getAttribute('data-settle'));
-            });
-          });
         }
 
         // ---------- Input (3D) ----------
@@ -1993,7 +1991,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
           }
           function handleClick(clientX, clientY) {
             var t = screenToWorldTile(clientX, clientY);
-            if (!t) return;
+            if (!t) { var r = renderer.domElement.getBoundingClientRect(); mouse.x = ((clientX - r.left) / r.width) * 2 - 1; mouse.y = -((clientY - r.top) / r.height) * 2 + 1; raycaster.setFromCamera(mouse, camera); var pt = new THREE.Vector3(); raycaster.ray.intersectPlane(groundPlane, pt); var x = Math.floor((pt.x - worldOrigin.x) / TILE); var y = Math.floor((pt.z - worldOrigin.z) / TILE); x = clamp(x, 0, WORLD.w-1); y = clamp(y, 0, WORLD.h-1); t = {x:x,y:y}; }
             var y0 = WORLD.elev[idx(t.x, t.y)] * 0.12;
             selection.position.set(
               worldOrigin.x + t.x * TILE,
@@ -2071,33 +2069,47 @@ import { declareWar, warTick, resetWars } from "./war.js";
               var treatedAsClick = !downInfo.moved && dist <= 6;
               if (treatedAsClick) {
                 handleClick(e.clientX, e.clientY);
-              } else if (downInfo.moved) {
-                selectionBox.style.display = "none";
-                var x0 = Math.min(e.clientX, downInfo.x);
-                var y0 = Math.min(e.clientY, downInfo.y);
-                var x1 = Math.max(e.clientX, downInfo.x);
-                var y1 = Math.max(e.clientY, downInfo.y);
-                var t0 = screenToWorldTile(x0, y0);
-                var t1 = screenToWorldTile(x1, y1);
-                if (t0 && t1) {
-                  var minX = Math.min(t0.x, t1.x);
-                  var maxX = Math.max(t0.x, t1.x);
-                  var minY = Math.min(t0.y, t1.y);
-                  var maxY = Math.max(t0.y, t1.y);
-                  var cx = (minX + maxX) / 2;
-                  var cy = (minY + maxY) / 2;
-                  var y0s = WORLD.elev[idx(Math.round(cx), Math.round(cy))] * 0.12;
-                  selection.position.set(
-                    worldOrigin.x + cx * TILE,
-                    y0s + 0.051,
-                    worldOrigin.z + cy * TILE,
-                  );
-                  selection.scale.set(maxX - minX + 1, 1, maxY - minY + 1);
-                  selection.visible = true;
-                  selectedTiles = [];
-                  for (var yy = minY; yy <= maxY; yy++)
-                    for (var xx = minX; xx <= maxX; xx++)
-                      selectedTiles.push({ x: xx, y: yy });
+              } 
+else if (downInfo.moved) {
+  selectionBox.style.display = "none";
+  var x0 = Math.min(e.clientX, downInfo.x);
+  var y0 = Math.min(e.clientY, downInfo.y);
+  var x1 = Math.max(e.clientX, downInfo.x);
+  var y1 = Math.max(e.clientY, downInfo.y);
+  selectedTiles = [];
+  // Project every tile center to screen and pick those inside the rectangle
+  var r = renderer.domElement.getBoundingClientRect();
+  for (var yy = 0; yy < WORLD.h; yy++) {
+    for (var xx = 0; xx < WORLD.w; xx++) {
+      var y0e = WORLD.elev[idx(xx, yy)] * 0.12;
+      var wx = worldOrigin.x + xx * TILE;
+      var wy = y0e + 0.04;
+      var wz = worldOrigin.z + yy * TILE;
+      var vec = new THREE.Vector3(wx, wy, wz);
+      vec.project(camera);
+      var sx = r.left + (vec.x + 1) * 0.5 * r.width;
+      var sy = r.top + (1 - (vec.y + 1) * 0.5) * r.height;
+      if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1) {
+        selectedTiles.push({x:xx, y:yy});
+      }
+    }
+  }
+  if (selectedTiles.length) {
+    // Set selection gizmo to cover bounding box of selected tiles
+    var minX = Math.min.apply(null, selectedTiles.map(function(t){return t.x;}));
+    var maxX = Math.max.apply(null, selectedTiles.map(function(t){return t.x;}));
+    var minY = Math.min.apply(null, selectedTiles.map(function(t){return t.y;}));
+    var maxY = Math.max.apply(null, selectedTiles.map(function(t){return t.y;}));
+    var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    var y0s = WORLD.elev[idx(Math.round(cx), Math.round(cy))] * 0.12;
+    selection.position.set(worldOrigin.x + cx * TILE, y0s + 0.051, worldOrigin.z + cy * TILE);
+    selection.scale.set(maxX - minX + 1, 1, maxY - minY + 1);
+    selection.visible = true;
+  } else {
+    selection.visible = false;
+  }
+}
+);
                 }
               }
             }
