@@ -83,7 +83,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
           year = 1;
         var dayDurations = { slow: 1000, medium: 500, fast: 250 };
         var dayDuration = dayDurations.medium;
-        var DAYS_PER_MONTH = 1; // monthly tick
+        var DAYS_PER_MONTH = 30; // keep day system while using monthly ticks
         var MONTHS_PER_YEAR = 12;
         var paused = false;
         var borderGroup = null,
@@ -1446,7 +1446,8 @@ import { declareWar, warTick, resetWars } from "./war.js";
           HUD.prestige.textContent = P.prestige | 0;
           HUD.score.textContent = P.score | 0;
           if (HUD.date)
-            HUD.date.textContent = "Month " + month + " Year " + year;
+            HUD.date.textContent =
+              "Day " + day + " Month " + month + " Year " + year;
         }
 
         function updateWarLog(events) {
@@ -1960,9 +1961,6 @@ import { declareWar, warTick, resetWars } from "./war.js";
           if (!paused) {
             econTime += dtms;
             if (econTime >= dayDuration) {
-              economyTick(WORLD, idx);
-              var events = warTick();
-              updateWarLog(events);
               econTime -= dayDuration;
               gameTick++;
               day++;
@@ -1973,6 +1971,9 @@ import { declareWar, warTick, resetWars } from "./war.js";
                   month = 1;
                   year++;
                 }
+                economyTick(WORLD, idx);
+                var events = warTick();
+                updateWarLog(events);
               }
               updateHUD();
             }
