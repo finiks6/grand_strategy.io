@@ -1709,6 +1709,9 @@ import { declareWar, warTick, resetWars } from "./war.js";
               '<div style="margin-top:10px"><b>🛠️ Buildings</b><div>' +
               (built.length ? built.join(", ") : "None") +
               "</div></div>";
+            if (!B.market[k])
+              body +=
+                '<div style="margin-top:6px;opacity:.8">No market — resources stay local</div>';
           } else {
             var can =
               isPlayerBorder(x, y) &&
