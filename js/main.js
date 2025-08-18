@@ -81,7 +81,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
         var day = 1,
           month = 1,
           year = 1;
-        var dayDurations = { slow: 2000, medium: 1000, fast: 500 };
+        var dayDurations = { slow: 1000, medium: 500, fast: 250 };
         var dayDuration = dayDurations.medium;
         var DAYS_PER_MONTH = 30;
         var MONTHS_PER_YEAR = 12;
