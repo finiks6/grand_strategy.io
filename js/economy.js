@@ -1,57 +1,111 @@
 import { Factions } from './world.js';
 import { Biome } from './biomes.js';
 
-// Compute resource production and population changes for each faction.
-// WORLD: {w,h,data,owner}; idx: function to convert x,y to array index.
+const rates = {
+  fishery: [1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3],
+  stoneMount: [1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3],
+  stoneOther: [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5],
+  lumberForest: [1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3],
+  lumberOther: [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5],
+  farmPlain: [1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3],
+  farmOther: [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5],
+  workshop: [1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3],
+  market: [1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, 2.6, 2.8, 3],
+};
+
 export function economyTick(WORLD, idx) {
-  const yields = [];
-  const bonuses = [];
-  const factionPop = [];
-  for (let f = 0; f < Factions.length; f++) {
-    yields[f] = { gold: 0, food: 0, wood: 0, stone: 0, iron: 0, luxury: 0 };
-    bonuses[f] = 1 + Factions[f].res.tools * 0.05;
-    factionPop[f] = 0;
-  }
-  const w = WORLD.w, h = WORLD.h;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
+  const fData = Factions.map(() => ({
+    prod: { gold: 0, food: 0, wood: 0, stone: 0, goods: 0 },
+    cons: { food: 0, goods: 0 },
+    tiles: [],
+    pop: 0,
+  }));
+  const baseGrowth = new Array(WORLD.w * WORLD.h).fill(0);
+  const hasMarket = new Array(WORLD.w * WORLD.h).fill(false);
+
+  for (let y = 0; y < WORLD.h; y++) {
+    for (let x = 0; x < WORLD.w; x++) {
       const k = idx(x, y);
       const fid = WORLD.owner[k];
       if (fid === -1) continue;
-      const b = WORLD.data[k];
-      switch (b) {
-        case Biome.GRASS:
-          yields[fid].food += 1;
-          break;
-        case Biome.FOREST:
-          yields[fid].wood += 1;
-          break;
-        case Biome.MOUNTAIN:
-          yields[fid].stone += 1;
-          yields[fid].iron += 1;
-          break;
-        case Biome.BERRY:
-          yields[fid].food += 2;
-          yields[fid].luxury += 1;
-          break;
-        case Biome.RIVER:
-          yields[fid].gold += 1;
-          yields[fid].luxury += 1;
-          break;
-        case Biome.LAKE:
-          yields[fid].food += 1;
-          yields[fid].gold += 1;
-          break;
+      fData[fid].tiles.push(k);
+      const pop = WORLD.pop[k] || 0;
+      fData[fid].pop += pop;
+
+      const biome = WORLD.data[k];
+      const B = WORLD.build;
+      const marketBuilt = B.market[k] > 0;
+      hasMarket[k] = marketBuilt;
+
+      if (marketBuilt) {
+        let avail = pop;
+
+        function employ(level, arr, key) {
+          if (!level) return 0;
+          const workers = Math.min(10, avail);
+          avail -= workers;
+          fData[fid].prod[key] += workers * (arr[level - 1] || 0);
+          return workers;
+        }
+
+        if (B.fishery[k] && (biome === Biome.LAKE || biome === Biome.RIVER)) {
+          employ(B.fishery[k], rates.fishery, 'food');
+        }
+        if (B.stoneMine[k]) {
+          if (biome === Biome.MOUNTAIN)
+            employ(B.stoneMine[k], rates.stoneMount, 'stone');
+          else if (biome === Biome.GRASS || biome === Biome.FOREST)
+            employ(B.stoneMine[k], rates.stoneOther, 'stone');
+        }
+        if (B.lumberCamp[k]) {
+          if (biome === Biome.FOREST)
+            employ(B.lumberCamp[k], rates.lumberForest, 'wood');
+          else if (biome === Biome.GRASS || biome === Biome.MOUNTAIN)
+            employ(B.lumberCamp[k], rates.lumberOther, 'wood');
+        }
+        if (B.farm[k]) {
+          if (biome === Biome.GRASS)
+            employ(B.farm[k], rates.farmPlain, 'food');
+          else if (biome === Biome.FOREST || biome === Biome.MOUNTAIN)
+            employ(B.farm[k], rates.farmOther, 'food');
+        }
+        if (B.workshop[k] && WORLD.settle[k]) {
+          employ(B.workshop[k], rates.workshop, 'goods');
+        }
+        employ(B.market[k], rates.market, 'gold');
+
+        const unemployed = avail;
+        fData[fid].prod.food += unemployed * 0.05;
+        fData[fid].prod.goods += unemployed * 0.05;
+        fData[fid].prod.wood += unemployed * 0.05;
+        fData[fid].prod.stone += unemployed * 0.05;
+
+        fData[fid].cons.food += pop * 0.1;
+        fData[fid].cons.goods += pop * 0.1;
+        let tax = 0.1;
+        switch (WORLD.settle[k]) {
+          case 'village':
+            tax = 0.2;
+            break;
+          case 'town':
+            tax = 0.3;
+            break;
+          case 'city':
+            tax = 0.4;
+            break;
+        }
+        fData[fid].prod.gold += pop * tax;
       }
-      const t = WORLD.settle[k]
+
+      let t = WORLD.settle[k]
         ? WORLD.settle[k]
-        : b === Biome.GRASS
-          ? 'plain'
-          : b === Biome.FOREST
-            ? 'forest'
-            : b === Biome.MOUNTAIN
-              ? 'mountain'
-              : 'sea';
+        : biome === Biome.GRASS
+        ? 'plain'
+        : biome === Biome.FOREST
+        ? 'forest'
+        : biome === Biome.MOUNTAIN
+        ? 'mountain'
+        : 'sea';
       let rate = 0;
       switch (t) {
         case 'city':
@@ -73,46 +127,44 @@ export function economyTick(WORLD, idx) {
           rate = 0.002;
           break;
       }
-      WORLD.pop[k] = Math.floor(WORLD.pop[k] * (1 + rate));
-      factionPop[fid] += WORLD.pop[k];
+      baseGrowth[k] = rate;
     }
   }
+
   for (let f = 0; f < Factions.length; f++) {
     const F = Factions[f];
-    const Y = yields[f];
-    const bonus = bonuses[f];
-    F.res.gold += Math.floor(Y.gold * bonus);
-    F.res.food += Math.floor(Y.food * bonus);
-    F.res.wood += Math.floor(Y.wood * bonus);
-    F.res.stone += Math.floor(Y.stone * bonus);
-    F.res.iron += Math.floor(Y.iron * bonus);
-    F.res.luxury += Math.floor(Y.luxury * bonus);
-    // luxury goods are automatically sold for gold
-    if (F.res.luxury > 0) {
-      F.res.gold += F.res.luxury * 3;
-      F.res.luxury = 0;
+    const data = fData[f];
+    F.res.gold += Math.floor(data.prod.gold);
+    F.res.food += Math.floor(data.prod.food);
+    F.res.wood += Math.floor(data.prod.wood);
+    F.res.stone += Math.floor(data.prod.stone);
+    F.res.goods += Math.floor(data.prod.goods);
+
+    F.res.food -= Math.floor(data.cons.food);
+    F.res.goods -= Math.floor(data.cons.goods);
+
+    const shortageFood = F.res.food < 0;
+    const shortageGoods = F.res.goods < 0;
+    if (F.res.food < 0) F.res.food = 0;
+    if (F.res.goods < 0) F.res.goods = 0;
+
+    let newPop = 0;
+    for (const k of data.tiles) {
+      let pop = WORLD.pop[k];
+      let rate = baseGrowth[k];
+      if ((shortageFood || shortageGoods) && hasMarket[k]) rate = -0.005;
+      pop = Math.max(0, Math.floor(pop * (1 + rate)));
+      WORLD.pop[k] = pop;
+      newPop += pop;
     }
-    // craft tools from wood and iron to boost future production
-    const craft = Math.min(
-      Math.floor(F.res.wood / 2),
-      Math.floor(F.res.iron / 2),
-    );
-    if (craft > 0) {
-      F.res.wood -= craft * 2;
-      F.res.iron -= craft * 2;
-      F.res.tools += craft;
-    }
-    F.pop = factionPop[f];
-    // capital generates gold based on population
-    F.res.gold += F.pop * 0.001;
+    F.pop = newPop;
     F.score =
       F.pop +
       F.res.gold +
       F.res.food +
+      F.res.goods +
       F.res.wood +
-      F.res.stone +
-      F.res.iron +
-      F.res.tools +
-      F.army;
+      F.res.stone;
   }
 }
+
