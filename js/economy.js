@@ -82,6 +82,7 @@ export function economyTick(WORLD, idx) {
       F.res.wood +
       F.res.stone +
       F.res.iron +
-      F.res.tools;
+      F.res.tools +
+      F.army;
   }
 }

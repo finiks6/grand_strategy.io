@@ -1,6 +1,7 @@
 import { Biome, BiomeMode } from "./biomes.js";
 import { Factions, seedPointsFor, seedFactions } from "./world.js";
 import { economyTick } from "./economy.js";
+import { declareWar, warTick } from "./war.js";
 
       (function () {
         "use strict";
@@ -42,6 +43,7 @@ import { economyTick } from "./economy.js";
           iron: document.getElementById("hud-iron"),
           tools: document.getElementById("hud-tools"),
           pop: document.getElementById("hud-pop"),
+          army: document.getElementById("hud-army"),
           stability: document.getElementById("hud-stability"),
           prestige: document.getElementById("hud-prestige"),
           score: document.getElementById("hud-score"),
@@ -1418,6 +1420,7 @@ import { economyTick } from "./economy.js";
         function updateHUD() {
           var P = Factions[playerFID];
           HUD.pop.textContent = P.pop | 0;
+          HUD.army.textContent = (P.army || 0) | 0;
           HUD.food.textContent = P.res.food | 0;
           HUD.wood.textContent = P.res.wood | 0;
           HUD.gold.textContent = P.res.gold | 0;
@@ -1841,6 +1844,7 @@ import { economyTick } from "./economy.js";
           var caps = seedPointsFor(sz.w, sz.h);
           genMap(sz.w, sz.h, biomeSel.value, caps);
           seedFactions(caps, WORLD, idx, playerFID, BORDER_R_INIT);
+          if (Factions.length > 1) declareWar(0, 1);
         }
         function startGame() {
           try {
@@ -1888,6 +1892,7 @@ import { economyTick } from "./economy.js";
           econTime += dtms;
           if (econTime >= 1000) {
             economyTick(WORLD, idx);
+            warTick();
             updateHUD();
             econTime = 0;
           }

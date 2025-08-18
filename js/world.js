@@ -50,6 +50,7 @@ export function seedFactions(capPts, WORLD, idx, playerFID, BORDER_R_INIT) {
         luxury: 0,
       },
       pop: 1000,
+      army: 0,
       stability: 50,
       prestige: 0,
       score: 0,
