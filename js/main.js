@@ -1,5 +1,6 @@
 import { Biome, BiomeMode } from "./biomes.js";
 import { Factions, seedPointsFor, seedFactions } from "./world.js";
+import { economyTick } from "./economy.js";
 
       (function () {
         "use strict";
@@ -1876,9 +1877,16 @@ import { Factions, seedPointsFor, seedFactions } from "./world.js";
 
         // ---------- Main loop ----------
         var last = performance.now();
+        var econTime = 0;
         function tick(t) {
           var dtms = t - last;
           last = t;
+          econTime += dtms;
+          if (econTime >= 1000) {
+            economyTick(WORLD, idx);
+            updateHUD();
+            econTime = 0;
+          }
           tSec += dtms / 1000;
           if (THREE_OK && waterMat && WGLReady)
             waterMat.uniforms.u_time.value += dtms / 1000;
