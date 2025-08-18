@@ -39,6 +39,8 @@ import { economyTick } from "./economy.js";
           food: document.getElementById("hud-food"),
           wood: document.getElementById("hud-wood"),
           stone: document.getElementById("hud-stone"),
+          iron: document.getElementById("hud-iron"),
+          tools: document.getElementById("hud-tools"),
           pop: document.getElementById("hud-pop"),
           stability: document.getElementById("hud-stability"),
           prestige: document.getElementById("hud-prestige"),
@@ -1420,6 +1422,8 @@ import { economyTick } from "./economy.js";
           HUD.wood.textContent = P.res.wood | 0;
           HUD.gold.textContent = P.res.gold | 0;
           HUD.stone.textContent = P.res.stone | 0;
+          HUD.iron.textContent = P.res.iron | 0;
+          HUD.tools.textContent = P.res.tools | 0;
           HUD.stability.textContent = P.stability | 0;
           HUD.prestige.textContent = P.prestige | 0;
           HUD.score.textContent = P.score | 0;
