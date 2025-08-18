@@ -1043,9 +1043,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
               map: texGrass,
               roughness: 0.85,
               metalness: 0.05,
-            
-  updateCamLimit();
-}));
+            }));
           var matForest =
             renderCache.matForest ||
             (renderCache.matForest = new THREE.MeshStandardMaterial({
