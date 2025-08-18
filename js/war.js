@@ -4,13 +4,20 @@ import { Factions } from './world.js';
 export const Wars = [];
 let tick = 0;
 
+// Possible battle event modifiers
 const BATTLE_EVENTS = [
   { name: 'Skirmish', aMod: 1, bMod: 1 },
   { name: 'Ambush', aMod: 1.5, bMod: 0.7 },
-  { name: 'Ambush', aMod: 0.7, bMod: 1.5 },
+  { name: 'Flank', aMod: 0.7, bMod: 1.5 },
   { name: 'Charge', aMod: 1.2, bMod: 1.2 },
   { name: 'Siege', aMod: 0.6, bMod: 0.6 },
 ];
+
+// Clear current wars and reset the tick counter. Useful when starting a new game.
+export function resetWars() {
+  Wars.length = 0;
+  tick = 0;
+}
 
 export function declareWar(a, b) {
   if (a === b) return;
