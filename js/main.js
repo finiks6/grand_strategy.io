@@ -100,8 +100,8 @@ import { declareWar, warTick, resetWars } from "./war.js";
 
         var camTarget = null,
           camDist = 42,
-          camYaw = -Math.PI / 4,
-          camPitch = 0.95;
+          camYaw = 0,
+          camPitch = Math.PI / 2;
         var keyState = {};
         var selectionBox = null,
           selectedTiles = [];
@@ -155,7 +155,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
             0.1,
             1200,
           );
-          camera.position.set(60, 50, 60);
+          camera.position.set(0, 60, 0);
           camera.lookAt(0, 0, 0);
           hemi = new THREE.HemisphereLight(0xcde3ff, 0x0c1422, 0.95);
           scene.add(hemi);
@@ -1837,8 +1837,8 @@ import { declareWar, warTick, resetWars } from "./war.js";
           var pinchD0 = 0;
           camTarget = new THREE.Vector3(0, 0, 0);
           camDist = 42;
-          camYaw = -Math.PI / 4;
-          camPitch = 0.95;
+          camYaw = 0;
+          camPitch = Math.PI / 2;
           selectionBox = document.createElement("div");
           selectionBox.style.position = "absolute";
           selectionBox.style.border = "1px solid #fff";
@@ -1847,13 +1847,10 @@ import { declareWar, warTick, resetWars } from "./war.js";
           stage.appendChild(selectionBox);
           var downInfo = { x: 0, y: 0, moved: false, id: null };
           function updateCam() {
-            camera.position.set(
-              camTarget.x + camDist * Math.cos(camYaw) * Math.cos(camPitch),
-              camTarget.y + camDist * Math.sin(camPitch),
-              camTarget.z + camDist * Math.sin(camYaw) * Math.cos(camPitch),
-            );
+            camera.position.set(camTarget.x, camTarget.y + camDist, camTarget.z);
             camera.lookAt(camTarget);
           }
+          updateCam();
           function screenToWorldTile(clientX, clientY) {
             var r = renderer.domElement.getBoundingClientRect();
             mouse.x = ((clientX - r.left) / r.width) * 2 - 1;
@@ -1861,8 +1858,8 @@ import { declareWar, warTick, resetWars } from "./war.js";
             raycaster.setFromCamera(mouse, camera);
             var inter = raycaster.intersectObjects([rayPlane], true)[0];
             if (!inter) return null;
-            var x = Math.round((inter.point.x - worldOrigin.x) / TILE),
-              y = Math.round((inter.point.z - worldOrigin.z) / TILE);
+            var x = Math.floor((inter.point.x - worldOrigin.x) / TILE),
+              y = Math.floor((inter.point.z - worldOrigin.z) / TILE);
             if (x < 0 || y < 0 || x >= WORLD.w || y >= WORLD.h) return null;
             return { x: x, y: y };
           }
@@ -2167,21 +2164,15 @@ import { declareWar, warTick, resetWars } from "./war.js";
             }
 
             if (camTarget) {
-              var move = (dtms / 16) * 0.05 * camDist;
-              var forward = new THREE.Vector3();
-              camera.getWorldDirection(forward);
-              forward.y = 0;
-              forward.normalize();
-              var right = new THREE.Vector3();
-              right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
-              if (keyState["w"]) camTarget.addScaledVector(forward, move);
-              if (keyState["s"]) camTarget.addScaledVector(forward, -move);
-              if (keyState["a"]) camTarget.addScaledVector(right, move);
-              if (keyState["d"]) camTarget.addScaledVector(right, -move);
+              var move = (dtms / 16) * 0.02 * camDist;
+              if (keyState["w"]) camTarget.z -= move;
+              if (keyState["s"]) camTarget.z += move;
+              if (keyState["a"]) camTarget.x -= move;
+              if (keyState["d"]) camTarget.x += move;
               camera.position.set(
-                camTarget.x + camDist * Math.cos(camYaw) * Math.cos(camPitch),
-                camTarget.y + camDist * Math.sin(camPitch),
-                camTarget.z + camDist * Math.sin(camYaw) * Math.cos(camPitch),
+                camTarget.x,
+                camTarget.y + camDist,
+                camTarget.z,
               );
               camera.lookAt(camTarget);
             }
