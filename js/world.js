@@ -51,6 +51,7 @@ export function seedFactions(capPts, WORLD, idx, playerFID, BORDER_R_INIT) {
       },
       pop: 1000,
       army: 0,
+      morale: 100,
       stability: 50,
       prestige: 0,
       score: 0,
