@@ -30,6 +30,7 @@ import { declareWar, warTick } from "./war.js";
         var MINI = document.getElementById("mini");
         var mctx = MINI.getContext("2d");
         var startBtn = document.getElementById("start");
+        var pauseBtn = document.getElementById("pause");
         var biomeSel = document.getElementById("biomeSel");
         var sizeSel = document.getElementById("sizeSel");
         var cityPanel = document.getElementById("cityPanel");
@@ -48,6 +49,7 @@ import { declareWar, warTick } from "./war.js";
           stability: document.getElementById("hud-stability"),
           prestige: document.getElementById("hud-prestige"),
           score: document.getElementById("hud-score"),
+          tick: document.getElementById("hud-tick"),
         };
         var WARLOG = document.getElementById("warLog");
 
@@ -74,6 +76,8 @@ import { declareWar, warTick } from "./war.js";
         var renderCache = {};
         var tSec = 0;
         var using2D = false;
+        var gameTick = 0;
+        var paused = false;
         var borderGroup = null,
           borderAnims = [];
         var playerFID = 0;
@@ -1433,6 +1437,7 @@ import { declareWar, warTick } from "./war.js";
           HUD.stability.textContent = P.stability | 0;
           HUD.prestige.textContent = P.prestige | 0;
           HUD.score.textContent = P.score | 0;
+          if (HUD.tick) HUD.tick.textContent = gameTick | 0;
         }
 
         function updateWarLog(events) {
@@ -1875,6 +1880,12 @@ import { declareWar, warTick } from "./war.js";
         function startGame() {
           try {
             ERR.style.display = "none";
+            gameTick = 0;
+            paused = false;
+            if (pauseBtn) {
+              pauseBtn.disabled = false;
+              pauseBtn.textContent = "⏸ Pause";
+            }
             seedPointsAndGen();
             updateHUD();
             if (THREE_OK) {
@@ -1907,6 +1918,11 @@ import { declareWar, warTick } from "./war.js";
         startBtn.onclick = function () {
           startGame();
         };
+        if (pauseBtn)
+          pauseBtn.onclick = function () {
+            paused = !paused;
+            pauseBtn.textContent = paused ? "▶ Resume" : "⏸ Pause";
+          };
         setTimeout(startGame, 120);
 
         // ---------- Main loop ----------
@@ -1915,49 +1931,52 @@ import { declareWar, warTick } from "./war.js";
         function tick(t) {
           var dtms = t - last;
           last = t;
-          econTime += dtms;
-          if (econTime >= 1000) {
-            economyTick(WORLD, idx);
-            var events = warTick();
-            updateWarLog(events);
-            updateHUD();
-            econTime = 0;
-          }
-          tSec += dtms / 1000;
-          if (THREE_OK && waterMat && WGLReady)
-            waterMat.uniforms.u_time.value += dtms / 1000;
-          // crown rotation + bob
-          if (playerCrown) {
-            playerCrown.rotation.y += (dtms / 1000) * 1.2;
-            var by = playerCrown.userData.baseY || playerCrown.position.y;
-            playerCrown.position.y = by + Math.sin(tSec * 2.4) * 0.06;
-          }
-          // border anims
-          for (var i = borderAnims.length - 1; i >= 0; i--) {
-            var A = borderAnims[i];
-            A.t += dtms;
-            var k = Math.min(1, A.t / A.dur);
-            if (A.type === "tilefill") {
-              var e = 1 - Math.pow(1 - k, 3);
-              A.node.scale.set(e, e, e);
-              A.node.material.opacity = 0.35 * (1 - k);
-              if (k >= 1) {
-                scene.remove(A.node);
-                A.node.traverse(disposeNode);
-                borderAnims.splice(i, 1);
-              }
-            } else if (A.type === "grow") {
-              var easeOut = 1 - Math.pow(1 - k, 3);
-              var s = 0.2 + 0.8 * easeOut;
-              A.node.scale.setScalar(s);
-              A.node.children.forEach(function (m, idx) {
-                m.material.opacity =
-                  idx === 1 ? 0.25 + 0.65 * easeOut : 0.1 + 0.2 * easeOut;
-              });
-              if (k >= 1) {
-                scene.remove(A.node);
-                A.node.traverse(disposeNode);
-                borderAnims.splice(i, 1);
+          if (!paused) {
+            econTime += dtms;
+            if (econTime >= 1000) {
+              economyTick(WORLD, idx);
+              var events = warTick();
+              updateWarLog(events);
+              updateHUD();
+              econTime = 0;
+              gameTick++;
+            }
+            tSec += dtms / 1000;
+            if (THREE_OK && waterMat && WGLReady)
+              waterMat.uniforms.u_time.value += dtms / 1000;
+            // crown rotation + bob
+            if (playerCrown) {
+              playerCrown.rotation.y += (dtms / 1000) * 1.2;
+              var by = playerCrown.userData.baseY || playerCrown.position.y;
+              playerCrown.position.y = by + Math.sin(tSec * 2.4) * 0.06;
+            }
+            // border anims
+            for (var i = borderAnims.length - 1; i >= 0; i--) {
+              var A = borderAnims[i];
+              A.t += dtms;
+              var k = Math.min(1, A.t / A.dur);
+              if (A.type === "tilefill") {
+                var e = 1 - Math.pow(1 - k, 3);
+                A.node.scale.set(e, e, e);
+                A.node.material.opacity = 0.35 * (1 - k);
+                if (k >= 1) {
+                  scene.remove(A.node);
+                  A.node.traverse(disposeNode);
+                  borderAnims.splice(i, 1);
+                }
+              } else if (A.type === "grow") {
+                var easeOut = 1 - Math.pow(1 - k, 3);
+                var s = 0.2 + 0.8 * easeOut;
+                A.node.scale.setScalar(s);
+                A.node.children.forEach(function (m, idx) {
+                  m.material.opacity =
+                    idx === 1 ? 0.25 + 0.65 * easeOut : 0.1 + 0.2 * easeOut;
+                });
+                if (k >= 1) {
+                  scene.remove(A.node);
+                  A.node.traverse(disposeNode);
+                  borderAnims.splice(i, 1);
+                }
               }
             }
           }
