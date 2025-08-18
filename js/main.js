@@ -44,10 +44,12 @@ import { declareWar, warTick } from "./war.js";
           tools: document.getElementById("hud-tools"),
           pop: document.getElementById("hud-pop"),
           army: document.getElementById("hud-army"),
+          morale: document.getElementById("hud-morale"),
           stability: document.getElementById("hud-stability"),
           prestige: document.getElementById("hud-prestige"),
           score: document.getElementById("hud-score"),
         };
+        var WARLOG = document.getElementById("warLog");
 
         // ---------- Core state ----------
         var TILE = 1;
@@ -1421,6 +1423,7 @@ import { declareWar, warTick } from "./war.js";
           var P = Factions[playerFID];
           HUD.pop.textContent = P.pop | 0;
           HUD.army.textContent = (P.army || 0) | 0;
+          HUD.morale.textContent = (P.morale || 0) | 0;
           HUD.food.textContent = P.res.food | 0;
           HUD.wood.textContent = P.res.wood | 0;
           HUD.gold.textContent = P.res.gold | 0;
@@ -1430,6 +1433,29 @@ import { declareWar, warTick } from "./war.js";
           HUD.stability.textContent = P.stability | 0;
           HUD.prestige.textContent = P.prestige | 0;
           HUD.score.textContent = P.score | 0;
+        }
+
+        function updateWarLog(events) {
+          if (!WARLOG) return;
+          for (var i = events.length - 1; i >= 0; i--) {
+            var E = events[i];
+            if (E.a === playerFID || E.b === playerFID) {
+              var enemy = E.a === playerFID ? Factions[E.b] : Factions[E.a];
+              var ourLoss = E.a === playerFID ? E.aLoss : E.bLoss;
+              var theirLoss = E.a === playerFID ? E.bLoss : E.aLoss;
+              WARLOG.textContent =
+                E.event +
+                " vs " +
+                enemy.name +
+                " (lost " +
+                ourLoss +
+                ", they lost " +
+                theirLoss +
+                ")";
+              return;
+            }
+          }
+          WARLOG.textContent = "";
         }
 
         // ---------- Tile helpers & panels ----------
@@ -1892,7 +1918,8 @@ import { declareWar, warTick } from "./war.js";
           econTime += dtms;
           if (econTime >= 1000) {
             economyTick(WORLD, idx);
-            warTick();
+            var events = warTick();
+            updateWarLog(events);
             updateHUD();
             econTime = 0;
           }
