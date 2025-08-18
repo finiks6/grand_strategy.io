@@ -33,6 +33,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
         var pauseBtn = document.getElementById("pause");
         var biomeSel = document.getElementById("biomeSel");
         var sizeSel = document.getElementById("sizeSel");
+        var speedSel = document.getElementById("speedSel");
         var cityPanel = document.getElementById("cityPanel");
         var tilePanel = document.getElementById("tilePanel");
         var ERR = document.getElementById("err");
@@ -49,7 +50,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
           stability: document.getElementById("hud-stability"),
           prestige: document.getElementById("hud-prestige"),
           score: document.getElementById("hud-score"),
-          tick: document.getElementById("hud-tick"),
+          date: document.getElementById("hud-date"),
         };
         var WARLOG = document.getElementById("warLog");
 
@@ -77,6 +78,13 @@ import { declareWar, warTick, resetWars } from "./war.js";
         var tSec = 0;
         var using2D = false;
         var gameTick = 0;
+        var day = 1,
+          month = 1,
+          year = 1;
+        var dayDurations = { slow: 2000, medium: 1000, fast: 500 };
+        var dayDuration = dayDurations.medium;
+        var DAYS_PER_MONTH = 30;
+        var MONTHS_PER_YEAR = 12;
         var paused = false;
         var borderGroup = null,
           borderAnims = [];
@@ -1437,7 +1445,9 @@ import { declareWar, warTick, resetWars } from "./war.js";
           HUD.stability.textContent = P.stability | 0;
           HUD.prestige.textContent = P.prestige | 0;
           HUD.score.textContent = P.score | 0;
-          if (HUD.tick) HUD.tick.textContent = gameTick | 0;
+          if (HUD.date)
+            HUD.date.textContent =
+              "Day " + day + " M " + month + " Y " + year;
         }
 
         function updateWarLog(events) {
@@ -1881,7 +1891,12 @@ import { declareWar, warTick, resetWars } from "./war.js";
           try {
             ERR.style.display = "none";
             gameTick = 0;
+            day = 1;
+            month = 1;
+            year = 1;
             paused = false;
+            dayDuration = dayDurations[(speedSel && speedSel.value) || "medium"];
+            econTime = 0;
             if (pauseBtn) {
               pauseBtn.disabled = false;
               pauseBtn.textContent = "⏸ Pause";
@@ -1924,6 +1939,10 @@ import { declareWar, warTick, resetWars } from "./war.js";
             paused = !paused;
             pauseBtn.textContent = paused ? "▶ Resume" : "⏸ Pause";
           };
+        if (speedSel)
+          speedSel.onchange = function () {
+            dayDuration = dayDurations[speedSel.value] || dayDuration;
+          };
         setTimeout(startGame, 120);
 
         // ---------- Main loop ----------
@@ -1934,13 +1953,22 @@ import { declareWar, warTick, resetWars } from "./war.js";
           last = t;
           if (!paused) {
             econTime += dtms;
-            if (econTime >= 1000) {
+            if (econTime >= dayDuration) {
               economyTick(WORLD, idx);
               var events = warTick();
               updateWarLog(events);
-              updateHUD();
-              econTime = 0;
+              econTime -= dayDuration;
               gameTick++;
+              day++;
+              if (day > DAYS_PER_MONTH) {
+                day = 1;
+                month++;
+                if (month > MONTHS_PER_YEAR) {
+                  month = 1;
+                  year++;
+                }
+              }
+              updateHUD();
             }
             tSec += dtms / 1000;
             if (THREE_OK && waterMat && WGLReady)
