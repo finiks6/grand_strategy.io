@@ -41,7 +41,7 @@ export function seedFactions(capPts, WORLD, idx, playerFID, BORDER_R_INIT) {
       color: colors[i % colors.length],
       cap: { x: cx, y: cy },
       res: {
-        gold: 100,
+        gold: 10,
         food: 10,
         wood: 10,
         stone: 10,

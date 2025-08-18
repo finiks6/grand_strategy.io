@@ -83,7 +83,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
           year = 1;
         var dayDurations = { slow: 1000, medium: 500, fast: 250 };
         var dayDuration = dayDurations.medium;
-        var DAYS_PER_MONTH = 30;
+        var DAYS_PER_MONTH = 1; // monthly tick
         var MONTHS_PER_YEAR = 12;
         var paused = false;
         var borderGroup = null,
@@ -1446,8 +1446,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
           HUD.prestige.textContent = P.prestige | 0;
           HUD.score.textContent = P.score | 0;
           if (HUD.date)
-            HUD.date.textContent =
-              "Day " + day + " M " + month + " Y " + year;
+            HUD.date.textContent = "Month " + month + " Year " + year;
         }
 
         function updateWarLog(events) {
@@ -1611,11 +1610,14 @@ import { declareWar, warTick, resetWars } from "./war.js";
               iconHTML("gold", "Altın Madeni", true) +
               '</div><div style="opacity:.75;font-size:12px;margin-top:4px">(Şimdilik hepsi placeholder)</div></div>';
           } else {
-            var can = isPlayerBorder(x, y) && !enemyOwned; // başka ülke toprağı ilhak edilemez
+            var can =
+              isPlayerBorder(x, y) &&
+              !enemyOwned &&
+              Factions[playerFID].res.gold >= 5; // yeni toprak 5 altın
             body +=
               '<div class="row"><button class="pill" disabled>🔎 Keşfet (placeholder)</button>' +
               (can
-                ? '<button class="pill" id="annexBtn">🏴 Kontrol Et (Sınırımıza kat)</button>'
+                ? '<button class="pill" id="annexBtn">🏴 Kontrol Et (5 altın)</button>'
                 : '<button class="pill" disabled>🏴 Kontrol Et</button>') +
               "</div>";
             if (enemyOwned)
@@ -1646,6 +1648,9 @@ import { declareWar, warTick, resetWars } from "./war.js";
           var annex = document.getElementById("annexBtn");
           if (annex) {
             annex.onclick = function () {
+              var P = Factions[playerFID];
+              if (P.res.gold < 5) return;
+              P.res.gold -= 5;
               if (using2D) {
                 var before = msSegments2D(playerFID);
                 var beforeSet = new Set();
@@ -1710,6 +1715,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
                 tilePanel.style.display = "none";
                 drawMini();
               }
+              updateHUD();
             };
           }
         }

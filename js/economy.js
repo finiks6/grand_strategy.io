@@ -68,13 +68,10 @@ export function economyTick(WORLD, idx) {
       F.res.iron -= craft * 2;
       F.res.tools += craft;
     }
-    const growth = Math.floor(F.res.food / 20);
-    if (growth > 0) {
-      F.pop += growth;
-      F.res.food -= growth;
-    } else if (F.res.food <= 0 && F.pop > 0) {
-      F.pop -= 1;
-    }
+    // population grows by 0.5% each month
+    F.pop = Math.floor(F.pop * 1.005);
+    // capital generates gold based on population
+    F.res.gold += F.pop * 0.001;
     F.score =
       F.pop +
       F.res.gold +
