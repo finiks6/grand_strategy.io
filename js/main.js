@@ -1,7 +1,7 @@
 import { Biome, BiomeMode } from "./biomes.js";
 import { Factions, seedPointsFor, seedFactions } from "./world.js";
 import { economyTick } from "./economy.js";
-import { declareWar, warTick } from "./war.js";
+import { declareWar, warTick, resetWars } from "./war.js";
 
       (function () {
         "use strict";
@@ -1886,6 +1886,7 @@ import { declareWar, warTick } from "./war.js";
               pauseBtn.disabled = false;
               pauseBtn.textContent = "⏸ Pause";
             }
+            resetWars();
             seedPointsAndGen();
             updateHUD();
             if (THREE_OK) {
