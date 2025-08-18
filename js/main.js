@@ -101,10 +101,13 @@ import { declareWar, warTick, resetWars } from "./war.js";
         var camTarget = null,
           camDist = 42,
           camYaw = 0,
-          camPitch = Math.PI / 2;
+          camPitch = Math.PI / 2,
+          camDistMax = 180;
+        var camDistMin = 12;
         var keyState = {};
         var selectionBox = null,
           selectedTiles = [];
+        var groundPlane = null;
 
         // ---------- Math helpers ----------
         var clamp = function (v, a, b) {
@@ -113,6 +116,18 @@ import { declareWar, warTick, resetWars } from "./war.js";
         var smooth = function (t) {
           return t * t * (3 - 2 * t);
         };
+
+        function updateCamLimit() {
+          if (!camera) return;
+          var halfW = (WORLD.w * TILE) / 2;
+          var halfH = (WORLD.h * TILE) / 2;
+          var fov = (camera.fov * Math.PI) / 180;
+          var aspect = camera.aspect || 1;
+          var maxZ = halfH / Math.tan(fov / 2);
+          var maxX = halfW / (Math.tan(fov / 2) * aspect);
+          camDistMax = Math.max(maxZ, maxX) + 1;
+          camDist = clamp(camDist, camDistMin, camDistMax);
+        }
 
         function disposeNode(o) {
           if (!o) return;
@@ -136,7 +151,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
           renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
           renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
           renderer.setSize(stage.clientWidth, stage.clientHeight);
-          renderer.setClearColor(0x0e1522, 1);
+          renderer.setClearColor(0x87ceeb, 1);
           renderer.toneMapping = THREE.ACESFilmicToneMapping;
           renderer.toneMappingExposure = 1.12;
           renderer.shadowMap.enabled = true;
@@ -148,7 +163,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
         }
         function makeScene() {
           scene = new THREE.Scene();
-          scene.fog = new THREE.Fog(0x0e1522, 60, 140);
+          scene.fog = new THREE.Fog(0x87ceeb, 60, 200);
           camera = new THREE.PerspectiveCamera(
             55,
             stage.clientWidth / stage.clientHeight,
@@ -157,7 +172,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
           );
           camera.position.set(0, 60, 0);
           camera.lookAt(0, 0, 0);
-          hemi = new THREE.HemisphereLight(0xcde3ff, 0x0c1422, 0.95);
+          hemi = new THREE.HemisphereLight(0xffffff, 0x87ceeb, 0.95);
           scene.add(hemi);
           sun = new THREE.DirectionalLight(0xfff4da, 1.25);
           sun.position.set(80, 120, 40);
@@ -169,7 +184,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
           sun.shadow.normalBias = 0.02;
           var ground = new THREE.Mesh(
             new THREE.PlaneGeometry(2000, 2000),
-            new THREE.MeshStandardMaterial({ color: 0x0f1b2b, roughness: 1 }),
+            new THREE.MeshStandardMaterial({ color: 0xbfd1e5, roughness: 1 }),
           );
           ground.rotation.x = -Math.PI / 2;
           ground.position.y = -0.05;
@@ -211,6 +226,10 @@ import { declareWar, warTick, resetWars } from "./war.js";
           renderer.setSize(stage.clientWidth, stage.clientHeight);
           camera.aspect = stage.clientWidth / stage.clientHeight;
           camera.updateProjectionMatrix();
+          updateCamLimit();
+          if (camTarget)
+            camera.position.set(camTarget.x, camTarget.y + camDist, camTarget.z);
+          if (camTarget) camera.lookAt(camTarget);
           MINI.width = 180;
           MINI.height = 128;
           if (mctx) mctx.imageSmoothingEnabled = false;
@@ -1851,15 +1870,16 @@ import { declareWar, warTick, resetWars } from "./war.js";
             camera.lookAt(camTarget);
           }
           updateCam();
+          updateCamLimit();
           function screenToWorldTile(clientX, clientY) {
             var r = renderer.domElement.getBoundingClientRect();
             mouse.x = ((clientX - r.left) / r.width) * 2 - 1;
             mouse.y = -((clientY - r.top) / r.height) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
-            var inter = raycaster.intersectObjects([rayPlane], true)[0];
-            if (!inter) return null;
-            var x = Math.floor((inter.point.x - worldOrigin.x) / TILE),
-              y = Math.floor((inter.point.z - worldOrigin.z) / TILE);
+            var pt = new THREE.Vector3();
+            raycaster.ray.intersectPlane(groundPlane, pt);
+            var x = Math.floor((pt.x - worldOrigin.x) / TILE);
+            var y = Math.floor((pt.z - worldOrigin.z) / TILE);
             if (x < 0 || y < 0 || x >= WORLD.w || y >= WORLD.h) return null;
             return { x: x, y: y };
           }
@@ -1923,7 +1943,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
                 var ps = Array.from(pointers.values());
                 var d = Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y);
                 if (!pinchD0) pinchD0 = d;
-                camDist = clamp(camDist * (pinchD0 / d), 12, 180);
+                camDist = clamp(camDist * (pinchD0 / d), camDistMin, camDistMax);
                 pinchD0 = d;
                 updateCam();
               }
@@ -1981,8 +2001,8 @@ import { declareWar, warTick, resetWars } from "./war.js";
             function (e) {
               camDist = clamp(
                 camDist * (1 + (e.deltaY > 0 ? 0.1 : -0.1)),
-                12,
-                180,
+                camDistMin,
+                camDistMax,
               );
               updateCam();
               e.preventDefault();
@@ -2060,6 +2080,7 @@ import { declareWar, warTick, resetWars } from "./war.js";
             if (THREE_OK) {
               raycaster = new THREE.Raycaster();
               mouse = new THREE.Vector2();
+              groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
               worldOrigin = new (THREE.Vector3 || function () {})();
               makeRenderer();
               makeScene();
