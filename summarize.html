@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <title>
+      Grand Strategy — v0.37 (fix PolylineCurve3 error, smooth borders, UI)
+    </title>
+    <style>
+      :root {
+        --bg: #87ceeb;
+        --panel: #0f1a2a;
+        --ink: #e6eef7;
+        --br: #213754;
+        --accent: #3aa0ff;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          system-ui,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+      }
+      /* Top HUD (EU4-like) */
+      #hudTop {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 12px;
+        border-bottom: 1px solid #1d304a;
+        background: linear-gradient(180deg, #0f1728, #0b1322);
+      }
+      #flag {
+        width: 28px;
+        height: 20px;
+        background: #fff;
+        border-radius: 2px;
+        box-shadow: 0 0 0 2px #233a5a inset;
+      }
+      #countryName {
+        font-weight: 800;
+        font-size: 16px;
+        letter-spacing: 0.3px;
+      }
+      .resRow {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .hudChip {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        background: #11243b;
+        border: 1px solid #2a4266;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .hudChip b {
+        min-width: 28px;
+        display: inline-block;
+        text-align: right;
+        color: var(--ink);
+      }
+      /* Bottom-left controls */
+      #controls {
+        position: absolute;
+        left: 10px;
+        bottom: 10px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        background: rgba(15, 26, 42, 0.85);
+        border: 1px solid #24364f;
+        border-radius: 12px;
+        padding: 8px 10px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(6px);
+      }
+      #controls label {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        color: var(--ink);
+      }
+      #controls select {
+        background: #0f2137;
+        color: var(--ink);
+        border: 1px solid #2a4a76;
+        border-radius: 10px;
+        padding: 6px 8px;
+        font-weight: 600;
+        transition: background 0.2s;
+      }
+      #controls button {
+        background: #173054;
+        color: var(--ink);
+        border: 1px solid #2a4a76;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: background 0.2s, transform 0.1s;
+      }
+      #controls button:hover {
+        background: #1d3b66;
+        transform: translateY(-1px);
+      }
+      #controls select:hover {
+        background: #132b4a;
+      }
+      /* Stage & panels */
+      #stage {
+        position: relative;
+        height: calc(100vh - 64px);
+        overflow: hidden;
+      }
+      #mini {
+        position: absolute;
+        right: 10px;
+        bottom: 10px;
+        width: 180px;
+        height: 128px;
+        border: 1px solid #22334a;
+        border-radius: 8px;
+        background: #0b1522;
+        image-rendering: pixelated;
+        z-index: 5;
+      }
+      .panel {
+        position: absolute;
+        right: 12px;
+        top: 12px;
+        min-width: 300px;
+        max-width: 420px;
+        background: rgba(15, 26, 42, 0.9);
+        backdrop-filter: blur(8px);
+        border: 1px solid #24364f;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        padding: 12px;
+        display: none;
+        z-index: 6;
+        color: var(--ink);
+      }
+      .panel h3 {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .pill {
+        border: 1px solid #2a4266;
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: #132741;
+        color: var(--ink);
+        cursor: pointer;
+        transition: background 0.2s, transform 0.1s;
+      }
+      .pill[disabled] {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .pill:hover:not([disabled]) {
+        background: #1d3b66;
+        transform: translateY(-1px);
+      }
+      .hud-note {
+        opacity: 0.7;
+        font-size: 12px;
+        margin: 4px 10px;
+        color: var(--ink);
+      }
+      canvas {
+        touch-action: none;
+      }
+      #flat {
+        position: absolute;
+        left: 10px;
+        top: 10px;
+        right: 10px;
+        bottom: 10px;
+        border-radius: 8px;
+        display: none;
+      }
+      #err {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        z-index: 99;
+        background: #7b1d1d;
+        color: #fff;
+        border: 1px solid #b54;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+        border-radius: 10px;
+        padding: 10px;
+        display: none;
+        max-width: min(520px, 90vw);
+        white-space: pre-wrap;
+        font-family: ui-monospace, Consolas, monospace;
+      }
+      /* Tile panel richer UI */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .kpi {
+        background: #11243b;
+        border: 1px solid #2a4266;
+        border-radius: 10px;
+        padding: 8px 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .kpi b {
+        margin-left: auto;
+      }
+      .sep {
+        height: 1px;
+        background: #213754;
+        margin: 8px 0;
+      }
+      /* === Icon frames (for tile menus) === */
+      .icon-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 6px;
+      }
+      .icon {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 64px;
+      }
+      .icon-frame {
+        width: 56px;
+        height: 56px;
+        border-radius: 12px;
+        padding: 6px;
+        background: linear-gradient(180deg, #10243c, #0d1a2b);
+        border: 2px solid #3a5a84;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          0 6px 14px rgba(0, 0, 0, 0.35);
+      }
+      .icon-frame img,
+      .icon-frame span {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+      }
+      .icon-frame span {
+        font-size: 28px;
+        line-height: 1;
+      }
+      .icon-frame.disabled {
+        opacity: 0.45;
+        filter: grayscale(0.2);
+      }
+      .icon-caption {
+        font-size: 12px;
+        margin-top: 4px;
+        opacity: 0.9;
+        text-align: center;
+        color: var(--ink);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Top HUD -->
+    <div id="hudTop">
+      <div id="flag" aria-label="flag"></div>
+      <div id="countryName">Our Country</div>
+      <div class="resRow">
+        <span class="hudChip">🪙 Gold <b id="hud-gold">0</b></span>
+        <span class="hudChip">🍎 Food <b id="hud-food">0</b></span>
+        <span class="hudChip">📦 Goods <b id="hud-goods">0</b></span>
+        <span class="hudChip">🪵 Wood <b id="hud-wood">0</b></span>
+        <span class="hudChip">🪨 Stone <b id="hud-stone">0</b></span>
+        <span class="hudChip">👥 Pop <b id="hud-pop">0</b></span>
+        <span class="hudChip">🕊️ Stability <b id="hud-stability">0</b></span>
+        <span class="hudChip">✨ Prestige <b id="hud-prestige">0</b></span>
+        <span class="hudChip">⭐ Score <b id="hud-score">0</b></span>
+        <span class="hudChip">📅 Date <b id="hud-date">Day 1 Month 1 Year 1</b></span>
+      </div>
+    </div>
+
+    <div class="hud-note">
+      PC: click → select tile; drag → pan; wheel → zoom. Double‑click centers
+      camera.
+    </div>
+
+    <div id="warLog" class="hud-note"></div>
+
+    <div id="stage">
+      <canvas id="flat"></canvas>
+      <canvas id="mini"></canvas>
+      <div id="cityPanel" class="panel"></div>
+      <div id="tilePanel" class="panel" style="top: auto; bottom: 140px"></div>
+      <div id="err"></div>
+
+      <!-- Bottom-left controls -->
+      <div id="controls">
+        <label
+          >Biome
+          <select id="biomeSel">
+            <option value="normal" selected>Normal</option>
+            <option value="sea">Sea</option>
+            <option value="plain">Plain</option>
+            <option value="mountain">Mountain</option>
+            <option value="forest">Forest</option>
+          </select>
+        </label>
+        <label
+          >Size
+          <select id="sizeSel">
+            <option value="small" selected>Small</option>
+            <option value="medium">Medium</option>
+            <option value="big">Big</option>
+          </select>
+        </label>
+        <label
+          >Speed
+          <select id="speedSel">
+            <option value="slow">⏳ Slow</option>
+            <option value="medium" selected>▶️ Medium</option>
+            <option value="fast">⚡ Fast</option>
+          </select>
+        </label>
+        <button id="start">🔁 Restart</button>
+        <button id="pause" disabled>⏸ Pause</button>
+      </div>
+    </div>
+
+    <script src="three.min.js"></script>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
